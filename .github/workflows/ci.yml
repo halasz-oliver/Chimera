@@ -1,0 +1,78 @@
+name: CHIMERA CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+        # TODO: Windows support hozzáadása
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            sudo apt-get update && sudo apt-get install -y gcc-12 g++-12
+            echo "CC=gcc-12" >> $GITHUB_ENV
+            echo "CXX=g++-12" >> $GITHUB_ENV
+          else
+            sudo apt-get update && sudo apt-get install -y clang-15
+            echo "CC=clang-15" >> $GITHUB_ENV
+            echo "CXX=clang++-15" >> $GITHUB_ENV
+          fi
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Configure CMake
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: |
+          cd build
+          make -j$(nproc) # TODO: ninja használata gyorsabb buildekhez
+
+      - name: Run tests
+        run: |
+          cd build
+          ./chimera_test
+
+      - name: Run demo (non-blocking)
+        run: |
+          cd build
+          timeout 10s ./chimera_demo || true  # ne törjön ha timeout
+
+    # TODO: Code coverage report
+    # TODO: Static analysis (clang-tidy)
+    # TODO: Memory leak check (valgrind)
+    # TODO: Performance benchmarks
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+    # TODO: CodeQL analysis
+    # TODO: Dependency vulnerability scan
+    # TODO: SAST scanning
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+    # TODO: Multi-stage Docker build
+    # TODO: Container security scanning
+    # TODO: Push to registry
