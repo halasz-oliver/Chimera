@@ -1,6 +1,7 @@
 #include "chimera/client.hpp"
 #include "chimera/base64.hpp"
 #include "chimera/dns_packet.hpp"
+#include "tl/expected.hpp"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,13 +13,13 @@
 
 namespace chimera {
 
-std::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::string& message) {
+tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::string& message) {
     auto start_time = std::chrono::steady_clock::now();
 
     // Socket létrehozás
     auto socket_result = create_udp_socket();
     if (!socket_result) {
-        return std::unexpected(socket_result.error());
+        return tl::unexpected(socket_result.error());
     }
     int sock = socket_result.value();
 
@@ -29,7 +30,7 @@ std::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::stri
     } catch (const std::exception& e) {
         close(sock);
         std::cerr << "Base64 encoding hiba: " << e.what() << std::endl;
-        return std::unexpected(ChimeraError::EncodingError);
+        return tl::unexpected(ChimeraError::EncodingError);
     }
 
     // Domain generálás
@@ -47,7 +48,7 @@ std::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::stri
     } catch (const std::exception& e) {
         close(sock);
         std::cerr << "DNS packet építési hiba: " << e.what() << std::endl;
-        return std::unexpected(ChimeraError::DnsError);
+        return tl::unexpected(ChimeraError::DnsError);
     }
 
     // Server cím beállítás
@@ -58,7 +59,7 @@ std::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::stri
     if (inet_pton(AF_INET, config_.dns_server.c_str(), &server_addr.sin_addr) <= 0) {
         close(sock);
         std::cerr << "Érvénytelen DNS server cím: " << config_.dns_server << std::endl;
-        return std::unexpected(ChimeraError::ConfigError);
+        return tl::unexpected(ChimeraError::ConfigError);
     }
 
     // Packet küldés
@@ -69,7 +70,7 @@ std::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::stri
 
     if (sent_bytes < 0) {
         std::cerr << "Küldési hiba: " << strerror(errno) << std::endl;
-        return std::unexpected(ChimeraError::NetworkError);
+        return tl::unexpected(ChimeraError::NetworkError);
     }
 
     auto end_time = std::chrono::steady_clock::now();
@@ -81,14 +82,14 @@ std::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::stri
     std::cout << "Base64 payload: " << encoded_message << std::endl;
     std::cout << "Latencia: " << latency.count() << "ms" << std::endl;
 
-    return SendResult{
+    return tl::expected<SendResult, ChimeraError>(SendResult{
         .bytes_sent = static_cast<size_t>(sent_bytes),
         .latency = latency,
         .used_domain = target_domain
-    };
+    });
 }
 
-std::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_server() {
+tl::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_server() {
     auto start_time = std::chrono::steady_clock::now();
 
     // Egyszerű DNS query a ping-hez
@@ -96,7 +97,7 @@ std::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_s
 
     auto socket_result = create_udp_socket();
     if (!socket_result) {
-        return std::unexpected(socket_result.error());
+        return tl::unexpected(socket_result.error());
     }
     int sock = socket_result.value();
 
@@ -116,7 +117,7 @@ std::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_s
 
     } catch ([[maybe_unused]] const std::exception& e) {
         close(sock);
-        return std::unexpected(ChimeraError::DnsError);
+        return tl::unexpected(ChimeraError::DnsError);
     }
 
     close(sock);
@@ -124,7 +125,7 @@ std::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_s
     const auto end_time = std::chrono::steady_clock::now();
     auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    return latency;
+    return tl::expected<std::chrono::milliseconds, ChimeraError>(latency);
 }
 
 std::string ChimeraClient::generate_random_subdomain() {
@@ -147,11 +148,11 @@ std::string ChimeraClient::generate_random_subdomain() {
     return subdomain;
 }
 
-std::expected<int, ChimeraError> ChimeraClient::create_udp_socket() const {
+tl::expected<int, ChimeraError> ChimeraClient::create_udp_socket() const {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         std::cerr << "Socket létrehozási hiba: " << strerror(errno) << std::endl;
-        return std::unexpected(ChimeraError::NetworkError);
+        return tl::unexpected(ChimeraError::NetworkError);
     }
 
     // Timeout beállítás
@@ -161,7 +162,7 @@ std::expected<int, ChimeraError> ChimeraClient::create_udp_socket() const {
 
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
         close(sock);
-        return std::unexpected(ChimeraError::NetworkError);
+        return tl::unexpected(ChimeraError::NetworkError);
     }
 
     return sock;
