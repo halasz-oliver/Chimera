@@ -1,46 +1,43 @@
-cmake_minimum_required(VERSION 3.15)
-project(chimera VERSION 0.2.0)
+cmake_minimum_required(VERSION 3.16)
+project(chimera VERSION 0.2.1)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBSODIUM REQUIRED IMPORTED_TARGET libsodium)
+
 # Compiler flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-Wall -Wextra -Wpedantic)
-    # TODO: -Werror hozzáadása amikor minden warning el van javítva
+add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Debug/Release specifikus beállítások
+# Debug/Release specific settings
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_definitions(CHIMERA_DEBUG=1)
-    add_compile_options(-g -O0)
+add_compile_definitions(CHIMERA_DEBUG=1)
+add_compile_options(-g -O0)
 else()
-    add_compile_options(-O3 -DNDEBUG)
-    # TODO: LTO engedélyezés release buildekhez
+add_compile_options(-O3 -DNDEBUG)
 endif()
 
 # Core library
 add_library(chimera_core
-        src/client.cpp
-        src/dns_packet.cpp
+src/client.cpp
+src/dns_packet.cpp
+src/crypto.cpp
 )
 
 target_include_directories(chimera_core PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Platform specifikus linkek
+target_link_libraries(chimera_core PUBLIC PkgConfig::LIBSODIUM)
+
+# Platform specific links (excluding libsodium, now handled above)
 if(UNIX AND NOT APPLE)
-    # Linux specifikus
-    target_link_libraries(chimera_core PRIVATE pthread)
-    # TODO: liburing support hozzáadása
-elseif(APPLE)
-    # macOS specifikus
-    # TODO: kqueue support
+target_link_libraries(chimera_core PRIVATE pthread)
 elseif(WIN32)
-    # Windows specifikus
-    target_link_libraries(chimera_core PRIVATE ws2_32)
-    # TODO: IOCP support
+target_link_libraries(chimera_core PRIVATE ws2_32)
 endif()
 
 # Main executable
@@ -51,22 +48,15 @@ target_link_libraries(chimera_demo chimera_core)
 add_executable(chimera_test tests/test_basic.cpp)
 target_link_libraries(chimera_test chimera_core)
 
-# TODO: Install targets
-# TODO: Package generation (CPack)
-# TODO: Documentation generation (Doxygen)
-
 # Custom targets
 add_custom_target(run_tests
-        COMMAND chimera_test
-        DEPENDS chimera_test
-        COMMENT "Running comprehensive tests"
+COMMAND chimera_test
+DEPENDS chimera_test
+COMMENT "Running comprehensive tests"
 )
 
 add_custom_target(run_demo
-        COMMAND chimera_demo
-        DEPENDS chimera_demo
-        COMMENT "Running demo application"
+COMMAND chimera_demo
+DEPENDS chimera_demo
+COMMENT "Running demo application"
 )
-
-# TODO: Valgrind target memória leak ellenőrzéshez
-# TODO: Clang-tidy target static analysis-hez

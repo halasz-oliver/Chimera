@@ -1,6 +1,7 @@
 #include "chimera/base64.hpp"
 #include "chimera/dns_packet.hpp"
 #include "chimera/client.hpp"
+#include "chimera/crypto.hpp"
 #include <iostream>
 #include <cassert>
 #include <vector>
@@ -110,6 +111,66 @@ void benchmark_base64() {
     std::cout << "Benchmark sikeres" << std::endl;
 }
 
+void test_crypto_aead() {
+    std::cout << "\nAEAD kripto tesztek (libsodium)..." << std::endl;
+
+    // A konstruktor hívás inicializálja a libsodiumot
+    chimera::AEAD aead;
+
+    // 1. Sikeres encrypt/decrypt kör
+    auto key_res = chimera::AEAD::generate_key();
+    assert(key_res.has_value());
+    auto key = key_res.value();
+
+    std::string original_message_str = "Ez egy szupertitkos üzenet, amit senki sem olvashat el! 🤫";
+    chimera::Plaintext original_message(original_message_str.begin(), original_message_str.end());
+    chimera::AssociatedData ad = {'v', '1', '.', '0'};
+
+    auto encrypted_res = chimera::AEAD::encrypt(original_message, key, ad);
+    assert(encrypted_res.has_value());
+    auto encrypted_packet = encrypted_res.value();
+
+    // Biztos, hogy nem ugyanaz, mint az eredeti?
+    assert(encrypted_packet.data != original_message);
+
+    auto decrypted_res = chimera::AEAD::decrypt(encrypted_packet, key, ad);
+    assert(decrypted_res.has_value());
+    auto decrypted_message = decrypted_res.value();
+
+    assert(decrypted_message == original_message);
+    std::cout << "Sikeres titkosítás és visszafejtés." << std::endl;
+
+    // 2. Hibás kulccsal való visszafejtés (ennek el kell buknia)
+    auto wrong_key_res = chimera::AEAD::generate_key();
+    assert(wrong_key_res.has_value());
+    auto wrong_key = wrong_key_res.value();
+    assert(key != wrong_key);
+
+    auto decrypt_fail_res = chimera::AEAD::decrypt(encrypted_packet, wrong_key, ad);
+    assert(!decrypt_fail_res.has_value());
+    assert(decrypt_fail_res.error() == chimera::CryptoError::DecryptionFailed);
+    std::cout << "Rossz kulcsos visszafejtés helyesen meghiúsult." << std::endl;
+
+    // 3. Megváltoztatott ciphertext (tampering)
+    chimera::EncryptedPacket tampered_packet = encrypted_packet;
+    tampered_packet.data[0] ^= 0xFF; // megpiszkáljuk az első bájtot
+
+    auto tamper_fail_res = chimera::AEAD::decrypt(tampered_packet, key, ad);
+    assert(!tamper_fail_res.has_value());
+    assert(tamper_fail_res.error() == chimera::CryptoError::DecryptionFailed);
+    std::cout << "Manipulált csomag visszafejtése helyesen meghiúsult." << std::endl;
+
+    // 4. Megváltoztatott associated data
+    chimera::AssociatedData wrong_ad = {'v', '1', '.', '1'};
+    auto ad_fail_res = chimera::AEAD::decrypt(encrypted_packet, key, wrong_ad);
+    assert(!ad_fail_res.has_value());
+    assert(ad_fail_res.error() == chimera::CryptoError::DecryptionFailed);
+    std::cout << "Manipulált 'associated data' helyesen meghiúsult." << std::endl;
+
+
+    std::cout << "AEAD kripto tesztek sikeresek" << std::endl;
+}
+
 int main() {
     std::cout << "=== CHIMERA Test Suite ===" << std::endl;
 
@@ -119,6 +180,7 @@ int main() {
         test_client_config();
         test_edge_cases();
         benchmark_base64();
+        test_crypto_aead();
 
         std::cout << "\nMinden teszt sikeres!" << std::endl;
         return 0;
