@@ -11,7 +11,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        compiler: [clang]  # Removed gcc temporarily
         build_type: [Debug, Release]
 
     runs-on: ${{ matrix.os }}
@@ -20,36 +19,55 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup compiler
+      - name: Setup Clang (Ubuntu)
         run: |
-          if [ "${{ matrix.compiler }}" = "gcc" ]; then
-            sudo apt-get update && sudo apt-get install -y gcc-14 g++-12
-            echo "CC=gcc-12" >> $GITHUB_ENV
-            echo "CXX=g++-12" >> $GITHUB_ENV
-          else
-            sudo apt-get update && sudo apt-get install -y clang-15
-            echo "CC=clang-15" >> $GITHUB_ENV
-            echo "CXX=clang++-15" >> $GITHUB_ENV
-          fi
+          sudo apt-get update
+          sudo apt-get install -y clang-15
+          echo "CC=clang-15" >> $GITHUB_ENV
+          echo "CXX=clang++-15" >> $GITHUB_ENV
+          # Verify compiler installation
+          clang-15 --version
+          which clang-15
         if: matrix.os == 'ubuntu-latest'
+
+      - name: Setup Clang (macOS)
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+          clang --version
+        if: matrix.os == 'macos-latest'
 
       - name: Install libsodium
         run: |
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            sudo apt-get update && sudo apt-get install -y libsodium-dev
+            sudo apt-get install -y libsodium-dev
           else
             brew install libsodium
           fi
 
-      - name: Configure CMake
+      - name: Configure CMake (Force Clang)
         run: |
           mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          echo "Forcing CMake to use: CC=$CC, CXX=$CXX"
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=$CC \
+            -DCMAKE_CXX_COMPILER=$CXX \
+            -DCMAKE_VERBOSE_MAKEFILE=ON
+
+      - name: Verify Compiler
+        run: |
+          cd build
+          echo "=== CMake Cache Check ==="
+          grep -i "CMAKE_CXX_COMPILER" CMakeCache.txt || echo "Not found in cache"
+          echo "=== Environment Check ==="
+          echo "CC=$CC"
+          echo "CXX=$CXX"
 
       - name: Build
         run: |
           cd build
-          make -j$(nproc)
+          make -j$(nproc) VERBOSE=1
 
       - name: Run tests
         run: |
@@ -60,17 +78,3 @@ jobs:
         run: |
           cd build
           timeout 10s ./chimera_demo || true
-
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-    # TODO: CodeQL analysis
-    # TODO: Dependency vulnerability scan
-
-  docker-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-    # TODO: Multi-stage Docker build
-    # TODO: Container security scanning
