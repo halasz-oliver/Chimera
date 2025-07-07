@@ -11,6 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
+        compiler: [clang]
         build_type: [Debug, Release]
 
     runs-on: ${{ matrix.os }}
@@ -19,23 +20,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Clang (Ubuntu)
+      - name: Setup Clang on Ubuntu
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-15
+          sudo apt-get update && sudo apt-get install -y clang-15
           echo "CC=clang-15" >> $GITHUB_ENV
           echo "CXX=clang++-15" >> $GITHUB_ENV
-          # Verify compiler installation
-          clang-15 --version
-          which clang-15
-        if: matrix.os == 'ubuntu-latest'
 
-      - name: Setup Clang (macOS)
+      - name: Setup Clang on macOS
+        if: matrix.os == 'macos-latest'
         run: |
+          # Homebrew is typically used on macOS runners for package management
+          # but clang is usually pre-installed. We just set the variables.
           echo "CC=clang" >> $GITHUB_ENV
           echo "CXX=clang++" >> $GITHUB_ENV
-          clang --version
-        if: matrix.os == 'macos-latest'
+
+      - name: Verify Compiler
+        run: |
+          echo "Using C compiler: $($CC --version)"
+          echo "Using C++ compiler: $($CXX --version)"
 
       - name: Install libsodium
         run: |
@@ -45,36 +48,20 @@ jobs:
             brew install libsodium
           fi
 
-      - name: Configure CMake (Force Clang)
+      - name: Configure CMake
         run: |
           mkdir build && cd build
-          echo "Forcing CMake to use: CC=$CC, CXX=$CXX"
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_C_COMPILER=$CC \
-            -DCMAKE_CXX_COMPILER=$CXX \
-            -DCMAKE_VERBOSE_MAKEFILE=ON
-
-      - name: Verify Compiler
-        run: |
-          cd build
-          echo "=== CMake Cache Check ==="
-          grep -i "CMAKE_CXX_COMPILER" CMakeCache.txt || echo "Not found in cache"
-          echo "=== Environment Check ==="
-          echo "CC=$CC"
-          echo "CXX=$CXX"
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+                   -DCMAKE_C_COMPILER=$CC \
+                   -DCMAKE_CXX_COMPILER=$CXX
 
       - name: Build
         run: |
           cd build
+          # Use VERBOSE=1 to see the exact compiler commands being used for easier debugging
           make -j$(nproc) VERBOSE=1
 
       - name: Run tests
         run: |
           cd build
           ./chimera_test
-
-      - name: Run demo (non-blocking)
-        run: |
-          cd build
-          timeout 10s ./chimera_demo || true
