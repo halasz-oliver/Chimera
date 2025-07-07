@@ -34,6 +34,14 @@ jobs:
           fi
         if: matrix.os == 'ubuntu-latest'
 
+      - name: Install libsodium
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sudo apt-get update && sudo apt-get install -y libsodium-dev
+          else
+            brew install libsodium
+          fi
+
       - name: Configure CMake
         run: |
           mkdir build && cd build
@@ -42,7 +50,7 @@ jobs:
       - name: Build
         run: |
           cd build
-          make -j$(nproc) # TODO: ninja használata gyorsabb buildekhez
+          make -j$(nproc)
 
       - name: Run tests
         run: |
@@ -52,27 +60,18 @@ jobs:
       - name: Run demo (non-blocking)
         run: |
           cd build
-          timeout 10s ./chimera_demo || true  # ne törjön ha timeout
-
-    # TODO: Code coverage report
-    # TODO: Static analysis (clang-tidy)
-    # TODO: Memory leak check (valgrind)
-    # TODO: Performance benchmarks
+          timeout 10s ./chimera_demo || true
 
   security-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
     # TODO: CodeQL analysis
     # TODO: Dependency vulnerability scan
-    # TODO: SAST scanning
 
   docker-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
     # TODO: Multi-stage Docker build
     # TODO: Container security scanning
-    # TODO: Push to registry

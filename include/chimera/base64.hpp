@@ -1,12 +1,10 @@
 #pragma once
 
-#include <array>
 #include <string>
+#include <array>
 #include <stdexcept>
 
-// Base64 encoder/decoder, most már padding is működik... remélhetőleg
-// TODO: optimalizálni lehetne SIMD-del de ki van rá ideje
-
+// Base64 encoder/decoder - padding kezelés most már működik
 namespace chimera {
 
 class Base64 {
@@ -20,10 +18,10 @@ class Base64 {
 
 public:
     static std::string encode(const std::string& in) {
-        if (in.empty()) return ""; // üres string = üres base64, logikus
+        if (in.empty()) return "";
 
         std::string out;
-        out.reserve(((in.size() + 2) / 3) * 4); // előre lefoglaljuk a memóriát, mert okosak vagyunk
+        out.reserve(((in.size() + 2) / 3) * 4);
 
         for (size_t i = 0; i < in.size(); i += 3) {
             uint32_t b = static_cast<uint8_t>(in[i]) << 16;
@@ -35,12 +33,16 @@ public:
             out += (i+1 < in.size()) ? tbl[(b>>6)&0x3F] : '=';
             out += (i+2 < in.size()) ? tbl[b&0x3F] : '=';
         }
+
         return out;
     }
 
     static std::string decode(const std::string& in) {
-        if (in.empty()) return ""; // üres base64 = üres string, ez is logikus
-        if (in.size() % 4 != 0) throw std::runtime_error("Rossz base64 hossz, valaki elrontotta");
+        if (in.empty()) return "";
+
+        if (in.size() % 4 != 0) {
+            throw std::runtime_error("Invalid base64 length");
+        }
 
         auto char_to_val = [](char c) -> int {
             if (c>='A'&&c<='Z') return c-'A';
@@ -49,11 +51,11 @@ public:
             if (c=='+') return 62;
             if (c=='/') return 63;
             if (c=='=') return -1; // padding
-            throw std::runtime_error("Illegális base64 karakter, ki írta ezt?");
+            throw std::runtime_error("Invalid base64 character");
         };
 
         std::string out;
-        out.reserve((in.size() * 3) / 4); // kb ennyi lesz
+        out.reserve((in.size() * 3) / 4);
 
         for (size_t i = 0; i < in.size(); i += 4) {
             int vals[4];
@@ -61,7 +63,7 @@ public:
                 vals[j] = char_to_val(in[i+j]);
             }
 
-            // padding számolás
+            // Padding számolás
             int pad = 0;
             if (vals[3] == -1) pad++;
             if (vals[2] == -1) pad++;
@@ -77,9 +79,6 @@ public:
 
         return out;
     }
-
-    // TODO: URL-safe base64 variant is kellene majd
-    // TODO: streaming interface nagy fájlokhoz
 };
 
 } // namespace chimera

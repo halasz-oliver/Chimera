@@ -4,9 +4,8 @@
 #include <chrono>
 #include "tl/expected.hpp"
 
-// Client osztály, most már kicsit intelligensebb
-// TODO: async I/O kellene, de egyelőre sync is jó
-
+// Kliens osztály - DNS steganográfia kezelés
+// Most már hibrid kulcscserével is
 namespace chimera {
 
     enum class ChimeraError {
@@ -14,7 +13,8 @@ namespace chimera {
         ConfigError,
         EncodingError,
         TimeoutError,
-        DnsError // TODO: részletesebb DNS hibakódok
+        DnsError,
+        CryptoError
     };
 
     struct ClientConfig {
@@ -22,16 +22,14 @@ namespace chimera {
         uint16_t dns_port = 53;
         std::string target_domain = "example.com";
         std::chrono::milliseconds timeout{5000};
-        bool use_random_subdomains = true; // TODO: implementálni
-
-        // TODO: DoH/DoT beállítások
-        // TODO: proxy beállítások
+        bool use_random_subdomains = true;
+        bool use_hybrid_crypto = true;  // Hibrid kulcscsere engedélyezés
     };
 
     struct SendResult {
         size_t bytes_sent;
         std::chrono::milliseconds latency;
-        std::string used_domain; // melyik domain-t használtuk
+        std::string used_domain;
     };
 
     class ChimeraClient {
@@ -41,29 +39,18 @@ namespace chimera {
         explicit ChimeraClient(ClientConfig config) : config_(std::move(config)) {}
 
         // Szöveg küldés DNS TXT record-on keresztül
-        // FIX: Changed std::expected to tl::expected
         tl::expected<SendResult, ChimeraError> send_text(const std::string& message);
-
-        // TODO: receive_text implementáció
-        // TODO: file transfer support
-        // TODO: interactive session mode
 
         // Konfiguráció lekérdezés/módosítás
         [[nodiscard]] const ClientConfig& get_config() const { return config_; }
         void update_config(ClientConfig new_config) { config_ = std::move(new_config); }
 
         // Kapcsolat teszt
-        // FIX: Changed std::expected to tl::expected
         tl::expected<std::chrono::milliseconds, ChimeraError> ping_dns_server();
 
     private:
         static std::string generate_random_subdomain();
-
-        // FIX: Changed std::expected to tl::expected
         [[nodiscard]] tl::expected<int, ChimeraError> create_udp_socket() const;
-
-        // TODO: DoH client implementáció
-        // TODO: DoT client implementáció
     };
 
 } // namespace chimera

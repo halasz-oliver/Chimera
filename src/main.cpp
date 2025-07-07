@@ -3,28 +3,25 @@
 #include <fstream>
 #include <string>
 
-// TODO: proper CLI parsing library (argparse vagy hasonló)
-// TODO: config file support (JSON/YAML)
-
+// Egyszerű CLI parsing - később cseréljük le egy rendes library-re
 void print_usage(const char* program_name) {
-    std::cout << "Használat: " << program_name << " [opciók] [üzenet_fájl]\n";
-    std::cout << "Opciók:\n";
-    std::cout << "  -s, --server <ip>     DNS server címe (default: 8.8.8.8)\n";
-    std::cout << "  -p, --port <port>     DNS server portja (default: 53)\n";
-    std::cout << "  -d, --domain <domain> Target domain (default: example.com)\n";
-    std::cout << "  -t, --timeout <ms>    Timeout milliszekundumban (default: 5000)\n";
-    std::cout << "  -h, --help           Ez a súgó\n";
-    std::cout << "\nPéldák:\n";
+    std::cout << "Usage: " << program_name << " [options] [message_file]\n";
+    std::cout << "Options:\n";
+    std::cout << "  -s, --server    DNS server address (default: 8.8.8.8)\n";
+    std::cout << "  -p, --port      DNS server port (default: 53)\n";
+    std::cout << "  -d, --domain    Target domain (default: example.com)\n";
+    std::cout << "  -t, --timeout   Timeout in milliseconds (default: 5000)\n";
+    std::cout << "  -h, --help      Show this help\n";
+    std::cout << "\nExamples:\n";
     std::cout << "  " << program_name << " message.txt\n";
     std::cout << "  " << program_name << " -s 1.1.1.1 -d test.com message.txt\n";
 }
 
 int main(int argc, char** argv) {
     chimera::ClientConfig config;
-    std::string message = "Hello from Chimera! 🦎"; // emoji mert miért ne
+    std::string message = "Hello from Chimera! 🦎";
 
-    // Nagyon primitív argument parsing
-    // TODO: ezt ki kell váltani egy rendes library-vel
+    // Alapvető argument parsing
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 
@@ -35,28 +32,28 @@ int main(int argc, char** argv) {
             if (i + 1 < argc) {
                 config.dns_server = argv[++i];
             } else {
-                std::cerr << "Hiányzó DNS server cím\n";
+                std::cerr << "Missing DNS server address\n";
                 return 1;
             }
         } else if (arg == "-p" || arg == "--port") {
             if (i + 1 < argc) {
                 config.dns_port = static_cast<uint16_t>(std::stoi(argv[++i]));
             } else {
-                std::cerr << "Hiányzó port szám\n";
+                std::cerr << "Missing port number\n";
                 return 1;
             }
         } else if (arg == "-d" || arg == "--domain") {
             if (i + 1 < argc) {
                 config.target_domain = argv[++i];
             } else {
-                std::cerr << "Hiányzó target domain\n";
+                std::cerr << "Missing target domain\n";
                 return 1;
             }
         } else if (arg == "-t" || arg == "--timeout") {
             if (i + 1 < argc) {
                 config.timeout = std::chrono::milliseconds(std::stoi(argv[++i]));
             } else {
-                std::cerr << "Hiányzó timeout érték\n";
+                std::cerr << "Missing timeout value\n";
                 return 1;
             }
         } else if (arg[0] != '-') {
@@ -70,13 +67,13 @@ int main(int argc, char** argv) {
                     message += line;
                 }
                 file.close();
-                std::cout << "Üzenet betöltve fájlból: " << arg << std::endl;
+                std::cout << "Message loaded from file: " << arg << std::endl;
             } else {
-                std::cerr << "Nem sikerült megnyitni a fájlt: " << arg << std::endl;
+                std::cerr << "Could not open file: " << arg << std::endl;
                 return 1;
             }
         } else {
-            std::cerr << "Ismeretlen opció: " << arg << std::endl;
+            std::cerr << "Unknown option: " << arg << std::endl;
             print_usage(argv[0]);
             return 1;
         }
@@ -86,35 +83,33 @@ int main(int argc, char** argv) {
     std::cout << "DNS Server: " << config.dns_server << ":" << config.dns_port << std::endl;
     std::cout << "Target Domain: " << config.target_domain << std::endl;
     std::cout << "Timeout: " << config.timeout.count() << "ms" << std::endl;
-    std::cout << "Üzenet hossza: " << message.size() << " karakter" << std::endl;
+    std::cout << "Message length: " << message.size() << " characters" << std::endl;
     std::cout << "=========================================" << std::endl;
 
-    // Client létrehozás és üzenet küldés
+    // Kliens létrehozás és üzenet küldés
     chimera::ChimeraClient client(config);
 
     // Ping teszt
-    std::cout << "\nDNS server ping teszt..." << std::endl;
+    std::cout << "\nDNS server ping test..." << std::endl;
     auto ping_result = client.ping_dns_server();
     if (ping_result) {
-        std::cout << "Ping sikeres: " << ping_result.value().count() << "ms" << std::endl;
+        std::cout << "Ping successful: " << ping_result.value().count() << "ms" << std::endl;
     } else {
-        std::cout << "Ping sikertelen, de próbáljuk az üzenet küldést..." << std::endl;
+        std::cout << "Ping failed, but trying to send message..." << std::endl;
     }
 
     // Üzenet küldés
-    std::cout << "\nÜzenet küldése..." << std::endl;
+    std::cout << "\nSending message..." << std::endl;
     auto result = client.send_text(message);
-
     if (result) {
         const auto& send_result = result.value();
-        std::cout << "\nSikeres küldés!" << std::endl;
-        std::cout << "Elküldött bájtok: " << send_result.bytes_sent << std::endl;
-        std::cout << "Latencia: " << send_result.latency.count() << "ms" << std::endl;
-        std::cout << "Használt domain: " << send_result.used_domain << std::endl;
+        std::cout << "\nMessage sent successfully!" << std::endl;
+        std::cout << "Bytes sent: " << send_result.bytes_sent << std::endl;
+        std::cout << "Latency: " << send_result.latency.count() << "ms" << std::endl;
+        std::cout << "Used domain: " << send_result.used_domain << std::endl;
         return 0;
     } else {
-        std::cout << "\nKüldési hiba!" << std::endl;
-        // TODO: részletes hibakód kiírás
+        std::cout << "\nSend error!" << std::endl;
         return 1;
     }
 }

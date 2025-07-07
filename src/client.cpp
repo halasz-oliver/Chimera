@@ -2,14 +2,14 @@
 #include "chimera/base64.hpp"
 #include "chimera/dns_packet.hpp"
 #include "tl/expected.hpp"
-
+#include <iostream>
+#include <chrono>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <random>
-#include <iostream>
 #include <cstring>
+#include <random>
 
 namespace chimera {
 
@@ -21,15 +21,16 @@ tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::strin
     if (!socket_result) {
         return tl::unexpected(socket_result.error());
     }
+
     int sock = socket_result.value();
 
-    // Üzenet base64 kódolás
+    // Base64 kódolás
     std::string encoded_message;
     try {
         encoded_message = Base64::encode(message);
     } catch (const std::exception& e) {
         close(sock);
-        std::cerr << "Base64 encoding hiba: " << e.what() << std::endl;
+        std::cerr << "Base64 encoding error: " << e.what() << std::endl;
         return tl::unexpected(ChimeraError::EncodingError);
     }
 
@@ -42,12 +43,11 @@ tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::strin
     // DNS packet építés
     DnsQuestion question{target_domain, DnsType::TXT};
     std::vector<uint8_t> packet;
-
     try {
         packet = DnsPacketBuilder::build_query(question, encoded_message);
     } catch (const std::exception& e) {
         close(sock);
-        std::cerr << "DNS packet építési hiba: " << e.what() << std::endl;
+        std::cerr << "DNS packet building error: " << e.what() << std::endl;
         return tl::unexpected(ChimeraError::DnsError);
     }
 
@@ -55,38 +55,36 @@ tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::strin
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(config_.dns_port);
-
     if (inet_pton(AF_INET, config_.dns_server.c_str(), &server_addr.sin_addr) <= 0) {
         close(sock);
-        std::cerr << "Érvénytelen DNS server cím: " << config_.dns_server << std::endl;
+        std::cerr << "Invalid DNS server address: " << config_.dns_server << std::endl;
         return tl::unexpected(ChimeraError::ConfigError);
     }
 
     // Packet küldés
     ssize_t sent_bytes = sendto(sock, packet.data(), packet.size(), 0,
-                               reinterpret_cast<sockaddr *>(&server_addr), sizeof(server_addr));
-
+                               reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
     close(sock);
 
     if (sent_bytes < 0) {
-        std::cerr << "Küldési hiba: " << strerror(errno) << std::endl;
+        std::cerr << "Send error: " << strerror(errno) << std::endl;
         return tl::unexpected(ChimeraError::NetworkError);
     }
 
     auto end_time = std::chrono::steady_clock::now();
     auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    // Debug info
-    std::cout << "Elküldve " << sent_bytes << " byte DNS packet-ben" << std::endl;
-    std::cout << "Használt domain: " << target_domain << std::endl;
+    // Debug információ
+    std::cout << "Sent " << sent_bytes << " bytes in DNS packet" << std::endl;
+    std::cout << "Used domain: " << target_domain << std::endl;
     std::cout << "Base64 payload: " << encoded_message << std::endl;
-    std::cout << "Latencia: " << latency.count() << "ms" << std::endl;
+    std::cout << "Latency: " << latency.count() << "ms" << std::endl;
 
-    return tl::expected<SendResult, ChimeraError>(SendResult{
+    return SendResult{
         .bytes_sent = static_cast<size_t>(sent_bytes),
         .latency = latency,
         .used_domain = target_domain
-    });
+    };
 }
 
 tl::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_server() {
@@ -94,11 +92,11 @@ tl::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_se
 
     // Egyszerű DNS query a ping-hez
     const DnsQuestion ping_question{"ping.test", DnsType::A};
-
     auto socket_result = create_udp_socket();
     if (!socket_result) {
         return tl::unexpected(socket_result.error());
     }
+
     int sock = socket_result.value();
 
     try {
@@ -110,22 +108,20 @@ tl::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_se
         inet_pton(AF_INET, config_.dns_server.c_str(), &server_addr.sin_addr);
 
         sendto(sock, packet.data(), packet.size(), 0,
-               reinterpret_cast<sockaddr *>(&server_addr), sizeof(server_addr));
+               reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
 
-        // TODO: válasz fogadás és parsing
+        // Válasz fogadás és parsing még nincs implementálva
         // Egyelőre csak a küldési időt mérjük
-
-    } catch ([[maybe_unused]] const std::exception& e) {
+    } catch (const std::exception&) {
         close(sock);
         return tl::unexpected(ChimeraError::DnsError);
     }
 
     close(sock);
-
     const auto end_time = std::chrono::steady_clock::now();
     auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    return tl::expected<std::chrono::milliseconds, ChimeraError>(latency);
+    return latency;
 }
 
 std::string ChimeraClient::generate_random_subdomain() {
@@ -133,7 +129,7 @@ std::string ChimeraClient::generate_random_subdomain() {
     static std::mt19937 gen(rd());
     static std::uniform_int_distribution<> dis(0, 35);
 
-    // Generálunk egy random subdomain-t
+    // Random subdomain generálás
     std::string subdomain;
     constexpr char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -151,7 +147,7 @@ std::string ChimeraClient::generate_random_subdomain() {
 tl::expected<int, ChimeraError> ChimeraClient::create_udp_socket() const {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
-        std::cerr << "Socket létrehozási hiba: " << strerror(errno) << std::endl;
+        std::cerr << "Socket creation error: " << strerror(errno) << std::endl;
         return tl::unexpected(ChimeraError::NetworkError);
     }
 

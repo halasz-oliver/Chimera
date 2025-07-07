@@ -1,10 +1,11 @@
 #include "chimera/dns_packet.hpp"
 #include <iostream>
+#include <iomanip>
 #include <stdexcept>
 
 namespace chimera {
 
-// Static member definitions
+// Static member definíciók
 std::random_device DnsPacketBuilder::rd;
 std::mt19937 DnsPacketBuilder::gen(DnsPacketBuilder::rd());
 
@@ -14,37 +15,34 @@ std::vector<uint8_t> DnsPacketBuilder::build_query(const DnsQuestion& q, const s
     try {
         // Header építés
         DnsHeader hdr{};
-        hdr.id = gen() & 0xFFFF;  // random ID minden querynél
-        hdr.flags = 0x0100;      // standard query with recursion desired
-        hdr.qdcount = 1;         // egy kérdés
-        hdr.ancount = 0;         // nincs válasz (query)
-        hdr.nscount = 0;         // nincs authority
-        hdr.arcount = 0;         // nincs additional
+        hdr.id = gen() & 0xFFFF;
+        hdr.flags = 0x0100;  // standard query with recursion desired
+        hdr.qdcount = 1;
+        hdr.ancount = 0;
+        hdr.nscount = 0;
+        hdr.arcount = 0;
 
         write_header(packet, hdr);
         write_question(packet, q);
 
-        // Ha van payload és TXT record, akkor hozzáadjuk
-        // TODO: ez nem szabványos DNS, de teszt célokra jó
+        // Payload hozzáadás TXT record esetén
         if (!payload.empty() && q.type == DnsType::TXT) {
             write_txt_data(packet, payload);
         }
 
-        std::cout << "DNS packet építve: " << packet.size() << " byte, ID="
+        std::cout << "DNS packet built: " << packet.size() << " bytes, ID="
                   << std::hex << hdr.id << std::dec << std::endl;
-
     } catch (const std::exception& e) {
-        std::cerr << "DNS packet építési hiba: " << e.what() << std::endl;
+        std::cerr << "DNS packet building error: " << e.what() << std::endl;
         throw;
     }
 
     return packet;
 }
 
-// TODO: DNS response parser implementáció
 std::vector<uint8_t> DnsPacketBuilder::parse_response(const std::vector<uint8_t>& response) {
     if (response.size() < 12) {
-        throw std::runtime_error("DNS response túl rövid");
+        throw std::runtime_error("DNS response too short");
     }
 
     // Egyelőre csak a header-t olvassuk
@@ -58,8 +56,8 @@ std::vector<uint8_t> DnsPacketBuilder::parse_response(const std::vector<uint8_t>
               << ", questions=" << std::dec << qdcount
               << ", answers=" << ancount << std::endl;
 
-    // TODO: teljes parsing implementáció
-    return {}; // placeholder
+    // Teljes parsing implementáció még hiányzik
+    return {};
 }
 
 void DnsPacketBuilder::write_header(std::vector<uint8_t>& packet, const DnsHeader& hdr) {
@@ -79,36 +77,36 @@ void DnsPacketBuilder::write_question(std::vector<uint8_t>& packet, const DnsQue
 
 void DnsPacketBuilder::write_domain_name(std::vector<uint8_t>& packet, const std::string& name) {
     if (name.empty()) {
-        packet.push_back(0); // root domain
+        packet.push_back(0);
         return;
     }
 
     auto labels = split_domain(name);
     for (const auto& label : labels) {
-        if (label.empty()) continue; // skip empty labels
+        if (label.empty()) continue;
 
         if (label.size() > 63) {
-            throw std::runtime_error("DNS label túl hosszú: " + label + " (" + std::to_string(label.size()) + " > 63)");
+            throw std::runtime_error("DNS label too long: " + label + " (" + std::to_string(label.size()) + " > 63)");
         }
 
         packet.push_back(static_cast<uint8_t>(label.size()));
         packet.insert(packet.end(), label.begin(), label.end());
     }
+
     packet.push_back(0); // null terminator
 }
 
 void DnsPacketBuilder::write_txt_data(std::vector<uint8_t>& packet, const std::string& data) {
     // Ez nem szabványos DNS format, csak demo célokra
-    // Valódi implementációban ez a válasz részben lenne
     if (data.size() > 255) {
-        throw std::runtime_error("TXT adat túl hosszú egy chunk-hoz: " + std::to_string(data.size()));
+        throw std::runtime_error("TXT data too long for single chunk: " + std::to_string(data.size()));
     }
 
     // TXT record formátum: length byte + data
     packet.push_back(static_cast<uint8_t>(data.size()));
     packet.insert(packet.end(), data.begin(), data.end());
 
-    std::cout << "TXT payload hozzáadva: " << data.size() << " byte" << std::endl;
+    std::cout << "TXT payload added: " << data.size() << " bytes" << std::endl;
 }
 
 void DnsPacketBuilder::write_uint16(std::vector<uint8_t>& packet, uint16_t value) {
@@ -140,7 +138,6 @@ std::vector<std::string> DnsPacketBuilder::split_domain(const std::string& domai
     return labels;
 }
 
-// Utility függvények a debug-hoz
 void DnsPacketBuilder::print_packet_hex(const std::vector<uint8_t>& packet) {
     std::cout << "DNS packet hex dump:" << std::endl;
     for (size_t i = 0; i < packet.size(); ++i) {
@@ -153,19 +150,19 @@ void DnsPacketBuilder::print_packet_hex(const std::vector<uint8_t>& packet) {
 
 bool DnsPacketBuilder::validate_domain_name(const std::string& domain) {
     if (domain.empty() || domain.size() > 253) {
-        return false; // DNS domain max 253 karakter
+        return false;
     }
 
     auto labels = split_domain(domain);
     for (const auto& label : labels) {
         if (label.empty() || label.size() > 63) {
-            return false; // DNS label max 63 karakter
+            return false;
         }
 
         // Alapvető karakter ellenőrzés
         for (char c : label) {
             if (!std::isalnum(c) && c != '-' && c != '_') {
-                return false; // csak alfanumerikus, kötőjel, aláhúzás
+                return false;
             }
         }
     }
