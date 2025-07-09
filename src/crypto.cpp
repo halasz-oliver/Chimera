@@ -1,12 +1,10 @@
 #include "chimera/crypto.hpp"
 #include <sodium.h>
+#include <oqs/oqs.h>
 #include <iostream>
 #include <cstring>
 
-// Megjegyzés: ML-KEM768 implementáció jelenleg hiányzik
-// Ez egy placeholder implementáció a struktúra bemutatásához
-// Éles használathoz szükséges egy teljes ML-KEM768 implementáció
-
+// Production ML-KEM768 implementáció liboqs-szel
 namespace chimera {
 
 // AEAD konstruktor - libsodium inicializálás
@@ -84,11 +82,15 @@ tl::expected<Plaintext, CryptoError> AEAD::decrypt(
     return decrypted_message;
 }
 
-// Hibrid kulcscsere implementáció
+// Hibrid kulcscsere implementáció - PRODUCTION ML-KEM768
 HybridKeyExchange::HybridKeyExchange() {
-    // Libsodium már inicializálva van az AEAD konstruktorban
     if (sodium_init() < 0) {
         throw std::runtime_error("Sodium initialization failed");
+    }
+
+    // liboqs inicializálás ellenőrzés
+    if (!OQS_KEM_alg_is_enabled(OQS_KEM_alg_kyber_768)) {
+        throw std::runtime_error("ML-KEM768 not available in liboqs");
     }
 }
 
@@ -103,14 +105,24 @@ tl::expected<HybridKeyPair, CryptoError> HybridKeyExchange::generate_keypair() {
         return tl::unexpected(CryptoError::KeyGenerationFailed);
     }
 
-    // ML-KEM768 kulcspár generálás (placeholder)
-    // Valódi implementációhoz szükséges ML-KEM768 library
-    keypair.mlkem_public.resize(1184);  // ML-KEM768 public key méret
-    keypair.mlkem_private.resize(2400); // ML-KEM768 private key méret
+    // ML-KEM768 kulcspár generálás liboqs-szel
+    OQS_KEM* kem = OQS_KEM_new(OQS_KEM_alg_kyber_768);
+    if (!kem) {
+        return tl::unexpected(CryptoError::KeyGenerationFailed);
+    }
 
-    // Placeholder random adatok (NEM BIZTONSÁGOS éles használatra!)
-    randombytes_buf(keypair.mlkem_public.data(), keypair.mlkem_public.size());
-    randombytes_buf(keypair.mlkem_private.data(), keypair.mlkem_private.size());
+    keypair.mlkem_public.resize(kem->length_public_key);
+    keypair.mlkem_private.resize(kem->length_secret_key);
+
+    OQS_STATUS status = OQS_KEM_keypair(kem,
+        keypair.mlkem_public.data(),
+        keypair.mlkem_private.data());
+
+    OQS_KEM_free(kem);
+
+    if (status != OQS_SUCCESS) {
+        return tl::unexpected(CryptoError::KeyGenerationFailed);
+    }
 
     return keypair;
 }
@@ -124,7 +136,6 @@ tl::expected<HybridKeyExchangeResult, CryptoError> HybridKeyExchange::initiate_e
     if (!client_keypair_result) {
         return tl::unexpected(client_keypair_result.error());
     }
-
     auto client_keypair = client_keypair_result.value();
 
     // X25519 kulcscsere
@@ -133,7 +144,7 @@ tl::expected<HybridKeyExchangeResult, CryptoError> HybridKeyExchange::initiate_e
         return tl::unexpected(x25519_secret_result.error());
     }
 
-    // ML-KEM768 enkapszuláció
+    // ML-KEM768 enkapszuláció - PRODUCTION
     auto mlkem_result = mlkem_encapsulate(server_mlkem_public);
     if (!mlkem_result) {
         return tl::unexpected(mlkem_result.error());
@@ -166,7 +177,7 @@ tl::expected<SharedSecret, CryptoError> HybridKeyExchange::respond_to_exchange(
         return tl::unexpected(x25519_secret_result.error());
     }
 
-    // ML-KEM768 dekapszuláció
+    // ML-KEM768 dekapszuláció - PRODUCTION
     auto mlkem_secret_result = mlkem_decapsulate(server_keypair.mlkem_private, client_mlkem_ciphertext);
     if (!mlkem_secret_result) {
         return tl::unexpected(mlkem_secret_result.error());
@@ -202,7 +213,6 @@ tl::expected<SharedSecret, CryptoError> HybridKeyExchange::x25519_exchange(
     }
 
     SharedSecret shared_secret(crypto_box_BEFORENMBYTES);
-
     if (crypto_box_beforenm(shared_secret.data(), public_key.data(), private_key.data()) != 0) {
         return tl::unexpected(CryptoError::KeyExchangeFailed);
     }
@@ -210,38 +220,65 @@ tl::expected<SharedSecret, CryptoError> HybridKeyExchange::x25519_exchange(
     return shared_secret;
 }
 
+// PRODUCTION ML-KEM768 enkapszuláció
 tl::expected<std::pair<SharedSecret, Ciphertext>, CryptoError> HybridKeyExchange::mlkem_encapsulate(
     const PublicKey& public_key) {
 
-    // Placeholder ML-KEM768 implementáció
-    // Valódi implementációhoz szükséges ML-KEM768 library
-    if (public_key.size() != 1184) {
+    OQS_KEM* kem = OQS_KEM_new(OQS_KEM_alg_kyber_768);
+    if (!kem) {
+        return tl::unexpected(CryptoError::UnsupportedAlgorithm);
+    }
+
+    if (public_key.size() != kem->length_public_key) {
+        OQS_KEM_free(kem);
         return tl::unexpected(CryptoError::InvalidPublicKey);
     }
 
-    SharedSecret shared_secret(32); // ML-KEM768 shared secret méret
-    Ciphertext ciphertext(1088);    // ML-KEM768 ciphertext méret
+    SharedSecret shared_secret(kem->length_shared_secret);
+    Ciphertext ciphertext(kem->length_ciphertext);
 
-    // Placeholder random adatok (NEM BIZTONSÁGOS!)
-    randombytes_buf(shared_secret.data(), shared_secret.size());
-    randombytes_buf(ciphertext.data(), ciphertext.size());
+    OQS_STATUS status = OQS_KEM_encaps(kem,
+        ciphertext.data(),
+        shared_secret.data(),
+        public_key.data());
+
+    OQS_KEM_free(kem);
+
+    if (status != OQS_SUCCESS) {
+        return tl::unexpected(CryptoError::KeyExchangeFailed);
+    }
 
     return std::make_pair(shared_secret, ciphertext);
 }
 
+// PRODUCTION ML-KEM768 dekapszuláció
 tl::expected<SharedSecret, CryptoError> HybridKeyExchange::mlkem_decapsulate(
     const PrivateKey& private_key,
     const Ciphertext& ciphertext) {
 
-    // Placeholder ML-KEM768 implementáció
-    if (private_key.size() != 2400 || ciphertext.size() != 1088) {
+    OQS_KEM* kem = OQS_KEM_new(OQS_KEM_alg_kyber_768);
+    if (!kem) {
+        return tl::unexpected(CryptoError::UnsupportedAlgorithm);
+    }
+
+    if (private_key.size() != kem->length_secret_key ||
+        ciphertext.size() != kem->length_ciphertext) {
+        OQS_KEM_free(kem);
         return tl::unexpected(CryptoError::InvalidCiphertext);
     }
 
-    SharedSecret shared_secret(32);
+    SharedSecret shared_secret(kem->length_shared_secret);
 
-    // Placeholder random adatok (NEM BIZTONSÁGOS!)
-    randombytes_buf(shared_secret.data(), shared_secret.size());
+    OQS_STATUS status = OQS_KEM_decaps(kem,
+        shared_secret.data(),
+        ciphertext.data(),
+        private_key.data());
+
+    OQS_KEM_free(kem);
+
+    if (status != OQS_SUCCESS) {
+        return tl::unexpected(CryptoError::KeyExchangeFailed);
+    }
 
     return shared_secret;
 }
@@ -251,7 +288,7 @@ tl::expected<CryptoKey, CryptoError> HybridKeyExchange::hkdf_expand(
     const std::string& info,
     size_t key_length) {
 
-    // Egyszerű HKDF implementáció libsodium-mal
+    // HKDF implementáció libsodium-mal
     CryptoKey derived_key(key_length);
 
     if (crypto_kdf_blake2b_derive_from_key(

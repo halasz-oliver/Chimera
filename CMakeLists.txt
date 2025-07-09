@@ -4,9 +4,13 @@ project(chimera VERSION 0.2.1)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Libsodium dependency
+# Dependencies
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBSODIUM REQUIRED IMPORTED_TARGET libsodium)
+
+# liboqs for post-quantum cryptography
+find_library(LIBOQS_LIB oqs REQUIRED)
+find_path(LIBOQS_INCLUDE_DIR oqs/oqs.h REQUIRED)
 
 # Compiler flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -29,12 +33,16 @@ add_library(chimera_core
 )
 
 target_include_directories(chimera_core PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${LIBOQS_INCLUDE_DIR}"
 )
 
-target_link_libraries(chimera_core PUBLIC PkgConfig::LIBSODIUM)
+target_link_libraries(chimera_core PUBLIC
+        PkgConfig::LIBSODIUM
+        "${LIBOQS_LIB}"
+)
 
-# Platform specific links
+# Platform-specific links
 if(UNIX AND NOT APPLE)
     target_link_libraries(chimera_core PRIVATE pthread)
 elseif(WIN32)
@@ -43,11 +51,11 @@ endif()
 
 # Main executable
 add_executable(chimera_demo src/main.cpp)
-target_link_libraries(chimera_demo chimera_core)
+target_link_libraries(chimera_demo PRIVATE chimera_core)
 
 # Test executable
 add_executable(chimera_test tests/test_basic.cpp)
-target_link_libraries(chimera_test chimera_core)
+target_link_libraries(chimera_test PRIVATE chimera_core)
 
 # Custom targets
 add_custom_target(run_tests

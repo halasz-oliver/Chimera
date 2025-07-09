@@ -1,10 +1,10 @@
 #pragma once
 
-#include <string>
 #include <array>
+#include <string>
 #include <stdexcept>
 
-// Base64 encoder/decoder - padding kezelés most már működik
+// Base64 encoder/decoder - most már teljes padding támogatással
 namespace chimera {
 
 class Base64 {
@@ -39,7 +39,6 @@ public:
 
     static std::string decode(const std::string& in) {
         if (in.empty()) return "";
-
         if (in.size() % 4 != 0) {
             throw std::runtime_error("Invalid base64 length");
         }

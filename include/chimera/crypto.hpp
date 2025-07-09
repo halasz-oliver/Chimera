@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 #include "tl/expected.hpp"
-#include <memory>
+#include <utility>
 
 // Kriptográfiai réteg - AEAD + hibrid kulcscsere
 // X25519 + ML-KEM768 kombináció a post-quantum biztonságért
@@ -45,7 +45,7 @@ struct HybridKeyPair {
     PrivateKey mlkem_private;
 };
 
-// Hibrid kulcscsere eredmény (renamed to avoid conflict)
+// Hibrid kulcscsere eredmény
 struct HybridKeyExchangeResult {
     SharedSecret shared_secret;
     Ciphertext mlkem_ciphertext;
@@ -110,7 +110,7 @@ private:
         const PublicKey& public_key
     );
 
-    // ML-KEM768 kulcscsere segédfüggvények
+    // ML-KEM768 kulcscsere segédfüggvények - PRODUCTION
     static tl::expected<std::pair<SharedSecret, Ciphertext>, CryptoError> mlkem_encapsulate(
         const PublicKey& public_key
     );

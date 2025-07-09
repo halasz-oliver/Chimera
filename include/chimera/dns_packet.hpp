@@ -18,9 +18,9 @@ namespace chimera {
     };
 
     enum class DnsClass : uint16_t {
-        IN = 1,    // Internet class
-        CH = 3,    // Chaos class
-        HS = 4     // Hesiod class
+        IN = 1, // Internet class
+        CH = 3, // Chaos class
+        HS = 4  // Hesiod class
     };
 
     struct DnsQuestion {
@@ -30,12 +30,12 @@ namespace chimera {
     };
 
     struct DnsHeader {
-        uint16_t id;        // Query ID
-        uint16_t flags;     // Flags (QR, Opcode, AA, TC, RD, RA, Z, RCODE)
-        uint16_t qdcount;   // Questions count
-        uint16_t ancount;   // Answers count
-        uint16_t nscount;   // Authority RRs count
-        uint16_t arcount;   // Additional RRs count
+        uint16_t id;     // Query ID
+        uint16_t flags;  // Flags (QR, Opcode, AA, TC, RD, RA, Z, RCODE)
+        uint16_t qdcount; // Questions count
+        uint16_t ancount; // Answers count
+        uint16_t nscount; // Authority RRs count
+        uint16_t arcount; // Additional RRs count
     };
 
     class DnsPacketBuilder {
@@ -47,7 +47,7 @@ namespace chimera {
         static std::vector<uint8_t> build_query(const DnsQuestion& q, const std::string& payload = "");
 
         // DNS response parsing (még nincs teljes implementáció)
-        static std::vector<uint8_t> parse_response(const std::vector<uint8_t>& response);
+        static std::vector<std::string> parse_response(const std::vector<uint8_t>& response);
 
         // Segédfüggvények
         static void print_packet_hex(const std::vector<uint8_t>& packet);

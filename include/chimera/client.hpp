@@ -2,6 +2,7 @@
 
 #include <string>
 #include <chrono>
+#include <cstdint>
 #include "tl/expected.hpp"
 
 // Kliens osztály - DNS steganográfia kezelés
@@ -23,7 +24,7 @@ namespace chimera {
         std::string target_domain = "example.com";
         std::chrono::milliseconds timeout{5000};
         bool use_random_subdomains = true;
-        bool use_hybrid_crypto = true;  // Hibrid kulcscsere engedélyezés
+        bool use_hybrid_crypto = true; // Hibrid kulcscsere engedélyezés
     };
 
     struct SendResult {
