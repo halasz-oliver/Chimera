@@ -6,11 +6,9 @@ on:
   pull_request:
     branches: [ main, master ]
 
-# Biztonság: csak a szükséges jogokat add meg
 permissions:
   contents: read
-  id-token: write   # pl. OIDC-hez, ha később kell
-  packages: write   # artefact-feltöltéshez
+  packages: write
 
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -26,21 +24,22 @@ jobs:
         build_type: [ Debug, Release ]
         exclude:
           - os: macos-latest
-            compiler: gcc   # macOS → GCC nehezebben elérhető
+            compiler: gcc
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      # Cache a teljes build-könyvtár helyett csak a kompilált liboqs/lib-eket
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/chimera-deps
-          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.compiler }}-
+      - name: Setup Build Environment
+        id: setup
+        run: |
+          # Cross-platform CPU core detection
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            echo "cpu_cores=$(nproc)" >> $GITHUB_OUTPUT
+          else
+            echo "cpu_cores=$(sysctl -n hw.ncpu)" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install toolchain & deps
         shell: bash
@@ -48,7 +47,6 @@ jobs:
           set -euo pipefail
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
             sudo apt-get update
-            # ----- Compiler -----
             if [[ "${{ matrix.compiler }}" == "clang" ]]; then
               sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev
               echo "CC=clang-15"  >> "$GITHUB_ENV"
@@ -59,20 +57,9 @@ jobs:
               echo "CC=gcc-12"  >> "$GITHUB_ENV"
               echo "CXX=g++-12" >> "$GITHUB_ENV"
             fi
-            # ----- Libs -----
             sudo apt-get install -y libsodium-dev pkg-config
-            if ! dpkg -s liboqs-dev >/dev/null 2>&1; then
-              echo \"liboqs not in APT – building from source\"
-              mkdir -p ~/.cache/chimera-deps && cd ~/.cache/chimera-deps
-              git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
-              cmake -S liboqs -B liboqs/build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
-              cmake --build liboqs/build -j$(nproc)
-              sudo cmake --install liboqs/build
-              sudo ldconfig
-            fi
           else   # macOS
-            brew update
-            brew install libsodium liboqs pkg-config
+            brew install libsodium pkg-config
             if [[ "${{ matrix.compiler }}" == "clang" ]]; then
               echo "CC=clang"  >> "$GITHUB_ENV"
               echo "CXX=clang++" >> "$GITHUB_ENV"
@@ -84,15 +71,16 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX \
-            -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+            -DCMAKE_VERBOSE_MAKEFILE=ON
 
       - name: Build
-        run: cmake --build build -j$(nproc)
+        run: |
+          cmake --build build -j${{ steps.setup.outputs.cpu_cores }}
 
       - name: Test
         run: |
           cd build
-          ctest --output-on-failure
+          ./chimera_test
 
       - name: Upload artifacts
         if: always()
@@ -102,32 +90,4 @@ jobs:
           path: |
             build/chimera_demo
             build/chimera_test
-            build/compile_commands.json
           retention-days: 7
-
-  # Opcionális bővített kriptotesztek a főágra
-  crypto-validation:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run extended crypto validation
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev libsodium-dev pkg-config
-          echo "CC=clang-15"  >> "$GITHUB_ENV"
-          echo "CXX=clang++-15" >> "$GITHUB_ENV"
-          # liboqs build (cached)
-          if ! ldconfig -p | grep -q liboqs; then
-            mkdir -p ~/.cache/chimera-deps && cd ~/.cache/chimera-deps
-            git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
-            cmake -S liboqs -B liboqs/build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
-            cmake --build liboqs/build -j$(nproc)
-            sudo cmake --install liboqs/build
-            sudo ldconfig
-          fi
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX
-          cmake --build build -j$(nproc)
-          build/chimera_test

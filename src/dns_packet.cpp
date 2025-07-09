@@ -40,7 +40,7 @@ std::vector<uint8_t> DnsPacketBuilder::build_query(const DnsQuestion& q, const s
     return packet;
 }
 
-std::vector<uint8_t> DnsPacketBuilder::parse_response(const std::vector<uint8_t>& response) {
+    std::vector<std::string> DnsPacketBuilder::parse_response(const std::vector<uint8_t>& response) {
     if (response.size() < 12) {
         throw std::runtime_error("DNS response too short");
     }
