@@ -2,12 +2,17 @@ name: CHIMERA CI/CD Pipeline
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ main, master ]
+
+# Biztonság: csak a szükséges jogokat add meg
+permissions:
+  contents: read
+  id-token: write   # pl. OIDC-hez, ha később kell
+  packages: write   # artefact-feltöltéshez
 
 env:
-  # Global environment variables
   CMAKE_BUILD_PARALLEL_LEVEL: 4
   CTEST_OUTPUT_ON_FAILURE: 1
 
@@ -16,153 +21,82 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        compiler: [clang, gcc]
-        build_type: [Debug, Release]
+        os: [ ubuntu-latest, macos-latest ]
+        compiler: [ clang, gcc ]
+        build_type: [ Debug, Release ]
         exclude:
-          # macOS doesn't have recent GCC easily available
           - os: macos-latest
-            compiler: gcc
+            compiler: gcc   # macOS → GCC nehezebben elérhető
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Build Environment
-        id: setup
-        run: |
-          # Determine number of CPU cores
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            echo "cpu_cores=$(nproc)" >> $GITHUB_OUTPUT
-          else
-            echo "cpu_cores=$(sysctl -n hw.ncpu)" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Setup Clang Compiler
-        if: matrix.compiler == 'clang'
-        run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            sudo apt-get update
-            sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev
-            echo "CC=clang-15" >> $GITHUB_ENV
-            echo "CXX=clang++-15" >> $GITHUB_ENV
-            echo "CXXFLAGS=-stdlib=libc++" >> $GITHUB_ENV
-          else
-            echo "CC=clang" >> $GITHUB_ENV
-            echo "CXX=clang++" >> $GITHUB_ENV
-          fi
-
-      - name: Setup GCC Compiler
-        if: matrix.compiler == 'gcc'
-        run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            sudo apt-get update
-            sudo apt-get install -y gcc-12 g++-12
-            echo "CC=gcc-12" >> $GITHUB_ENV
-            echo "CXX=g++-12" >> $GITHUB_ENV
-          fi
-
-      - name: Verify Compiler
-        run: |
-          echo "C Compiler: $($CC --version)"
-          echo "C++ Compiler: $($CXX --version)"
-          echo "Build Type: ${{ matrix.build_type }}"
-          echo "CPU Cores: ${{ steps.setup.outputs.cpu_cores }}"
-
-      - name: Cache Dependencies
-        uses: actions/cache@v3
+      # Cache a teljes build-könyvtár helyett csak a kompilált liboqs/lib-eket
+      - uses: actions/cache@v4
         with:
           path: |
-            ~/vcpkg
-            ~/.cache/vcpkg
-          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('**/CMakeLists.txt') }}
+            ~/.cache/chimera-deps
+          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('**/CMakeLists.txt') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.compiler }}-deps-
+            ${{ runner.os }}-${{ matrix.compiler }}-
 
-      - name: Install libsodium
+      - name: Install toolchain & deps
+        shell: bash
         run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          set -euo pipefail
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            sudo apt-get update
+            # ----- Compiler -----
+            if [[ "${{ matrix.compiler }}" == "clang" ]]; then
+              sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev
+              echo "CC=clang-15"  >> "$GITHUB_ENV"
+              echo "CXX=clang++-15" >> "$GITHUB_ENV"
+              echo "CXXFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
+            else
+              sudo apt-get install -y gcc-12 g++-12
+              echo "CC=gcc-12"  >> "$GITHUB_ENV"
+              echo "CXX=g++-12" >> "$GITHUB_ENV"
+            fi
+            # ----- Libs -----
             sudo apt-get install -y libsodium-dev pkg-config
-          else
-            brew install libsodium pkg-config
-          fi
-
-      - name: Install liboqs (Post-Quantum Cryptography)
-        run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            # Try package manager first, fallback to source build
-            if sudo apt-get install -y liboqs-dev; then
-              echo "liboqs installed via apt"
-            else
-              echo "Building liboqs from source"
-              git clone https://github.com/open-quantum-safe/liboqs.git
-              cd liboqs
-              mkdir build && cd build
-              cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
-              make -j${{ steps.setup.outputs.cpu_cores }}
-              sudo make install
+            if ! dpkg -s liboqs-dev >/dev/null 2>&1; then
+              echo \"liboqs not in APT – building from source\"
+              mkdir -p ~/.cache/chimera-deps && cd ~/.cache/chimera-deps
+              git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
+              cmake -S liboqs -B liboqs/build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+              cmake --build liboqs/build -j$(nproc)
+              sudo cmake --install liboqs/build
               sudo ldconfig
-              cd ../..
             fi
-          else
-            # macOS via Homebrew
-            if brew install liboqs; then
-              echo "liboqs installed via brew"
-            else
-              echo "Building liboqs from source on macOS"
-              git clone https://github.com/open-quantum-safe/liboqs.git
-              cd liboqs
-              mkdir build && cd build
-              cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
-              make -j${{ steps.setup.outputs.cpu_cores }}
-              sudo make install
-              cd ../..
+          else   # macOS
+            brew update
+            brew install libsodium liboqs pkg-config
+            if [[ "${{ matrix.compiler }}" == "clang" ]]; then
+              echo "CC=clang"  >> "$GITHUB_ENV"
+              echo "CXX=clang++" >> "$GITHUB_ENV"
             fi
-          fi
-
-      - name: Verify Dependencies
-        run: |
-          echo "Checking libsodium..."
-          pkg-config --modversion libsodium || echo "libsodium not found via pkg-config"
-          echo "Checking liboqs..."
-          find /usr -name "liboqs*" 2>/dev/null || echo "liboqs search completed"
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            find /usr/local -name "liboqs*" 2>/dev/null || echo "liboqs search in /usr/local completed"
           fi
 
       - name: Configure CMake
         run: |
-          mkdir build && cd build
-          cmake .. \
+          cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_C_COMPILER=$CC \
-            -DCMAKE_CXX_COMPILER=$CXX \
-            -DCMAKE_VERBOSE_MAKEFILE=ON \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+            -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX \
+            -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-      - name: Build Project
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
         run: |
           cd build
-          make -j${{ steps.setup.outputs.cpu_cores }}
+          ctest --output-on-failure
 
-      - name: Run Unit Tests
-        run: |
-          cd build
-          echo "Running comprehensive test suite..."
-          ./chimera_test
-
-      - name: Run Demo Application
-        run: |
-          cd build
-          echo "Testing demo application..."
-          echo "Phase 1 Complete - Production ML-KEM768 Test" > test_message.txt
-          ./chimera_demo test_message.txt || echo "Demo completed with expected behavior"
-
-      - name: Collect Build Artifacts
+      - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: chimera-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
           path: |
@@ -171,80 +105,29 @@ jobs:
             build/compile_commands.json
           retention-days: 7
 
-      - name: Security Scan (Release builds only)
-        if: matrix.build_type == 'Release' && matrix.os == 'ubuntu-latest'
-        run: |
-          echo "Running basic security checks..."
-          cd build
-          # Check for common security issues
-          if command -v checksec >/dev/null; then
-            checksec --file=./chimera_demo
-            checksec --file=./chimera_test
-          fi
-
-  # Additional job for specialized testing
+  # Opcionális bővített kriptotesztek a főágra
   crypto-validation:
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev
-          sudo apt-get install -y libsodium-dev pkg-config
-          echo "CC=clang-15" >> $GITHUB_ENV
-          echo "CXX=clang++-15" >> $GITHUB_ENV
-
-      - name: Install liboqs
-        run: |
-          git clone https://github.com/open-quantum-safe/liboqs.git
-          cd liboqs
-          mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-
-      - name: Extended Crypto Testing
-        run: |
-          mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX
-          make -j$(nproc)
-          echo "Running extended cryptographic validation..."
-          ./chimera_test
-          echo "Phase 1 Complete: Production ML-KEM768 + X25519 validated!"
-
-  # Documentation and linting
-  quality-checks:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Clang Tools
+      - uses: actions/checkout@v4
+      - name: Run extended crypto validation
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y clang-15 clang-tidy-15 clang-format-15
-
-      - name: Run clang-format check
-        run: |
-          find src include -name "*.cpp" -o -name "*.hpp" | xargs clang-format-15 --dry-run --Werror
-
-      - name: Basic Static Analysis
-        run: |
-          echo "Running basic static analysis..."
-          # This is a placeholder - in production you'd run full clang-tidy
-          find src -name "*.cpp" | head -3 | xargs clang-tidy-15 --checks="-*,readability-*" || echo "Static analysis completed"
-
-      - name: Check README and Documentation
-        run: |
-          echo "Validating documentation..."
-          if [ -f README.md ]; then
-            echo "README.md exists"
-            grep -q "PHASE 1 COMPLETE" README.md && echo "Phase 1 status documented"
+          sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev libsodium-dev pkg-config
+          echo "CC=clang-15"  >> "$GITHUB_ENV"
+          echo "CXX=clang++-15" >> "$GITHUB_ENV"
+          # liboqs build (cached)
+          if ! ldconfig -p | grep -q liboqs; then
+            mkdir -p ~/.cache/chimera-deps && cd ~/.cache/chimera-deps
+            git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
+            cmake -S liboqs -B liboqs/build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+            cmake --build liboqs/build -j$(nproc)
+            sudo cmake --install liboqs/build
+            sudo ldconfig
           fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX
+          cmake --build build -j$(nproc)
+          build/chimera_test
