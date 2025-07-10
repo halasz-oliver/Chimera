@@ -40,14 +40,14 @@ namespace chimera {
         explicit ChimeraClient(ClientConfig config) : config_(std::move(config)) {}
 
         // Szöveg küldés DNS TXT record-on keresztül
-        tl::expected<SendResult, ChimeraError> send_text(const std::string& message);
+        tl::expected<SendResult, ChimeraError> send_text(const std::string& message) const;
 
         // Konfiguráció lekérdezés/módosítás
         [[nodiscard]] const ClientConfig& get_config() const { return config_; }
         void update_config(ClientConfig new_config) { config_ = std::move(new_config); }
 
         // Kapcsolat teszt
-        tl::expected<std::chrono::milliseconds, ChimeraError> ping_dns_server();
+        tl::expected<std::chrono::milliseconds, ChimeraError> ping_dns_server() const;
 
     private:
         static std::string generate_random_subdomain();

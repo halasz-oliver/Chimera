@@ -6,7 +6,7 @@ A polymorphic framework designed to create practically undetectable, hidden comm
 
 ## Project Status
 
-**PHASE 1 COMPLETE!** The cryptographic core is now production-ready with real ML-KEM768 implementation and genuine post-quantum security.
+**PHASE 2 IN PROGRESS!** Transport layer foundation complete with DNS response parsing and pluggable transport architecture. Phase 1 cryptographic core remains production-ready.
 
 This is an ongoing learning and development project. For feedback, contributions, or collaboration, email me at `halaszoliver45(at)gmail.com`.
 
@@ -22,27 +22,33 @@ CHIMERA aims to be a comprehensive steganographic communication system that:
 
 ### **Phase 1 Complete - Production Cryptographic Foundation**
 
-- **AEAD Cryptography**: Production-ready ChaCha20-Poly1305 authenticated encryption via libsodium
-- **Production Hybrid Key Exchange**: **Real X25519 + ML-KEM768** implementation using liboqs
-- **Post-Quantum Security**: Genuine quantum-resistant cryptography (no more placeholders!)
-- **Base64 Codec**: Complete encoder/decoder with HTML entities fixed
-- **DNS Packet Builder**: Structured packet construction with random IDs and headers
-- **UDP Socket Communication**: DNS query transmission with timeout support
-- **Client Configuration**: Flexible config system with validation
-- **CLI Interface**: Command-line argument parsing and file input support
-- **Build System**: Cross-platform CMake with liboqs integration
-- **Random Subdomain Generation**: Dynamic domain generation for steganographic queries
-- **Production Test Suite**: Comprehensive testing with real post-quantum crypto validation
-- **HKDF Key Derivation**: Secure key derivation from hybrid secrets
+- ✅ **AEAD Cryptography**: Production-ready ChaCha20-Poly1305 authenticated encryption via libsodium
+- ✅ **Production Hybrid Key Exchange**: **Real X25519 + ML-KEM768** implementation using liboqs
+- ✅ **Post-Quantum Security**: Genuine quantum-resistant cryptography (no more placeholders!)
+- ✅ **Base64 Codec**: Complete encoder/decoder with HTML entities fixed
+- ✅ **DNS Packet Builder**: Structured packet construction with random IDs and headers
+- ✅ **UDP Socket Communication**: DNS query transmission with timeout support
+- ✅ **Client Configuration**: Flexible config system with validation
+- ✅ **CLI Interface**: Command-line argument parsing and file input support
+- ✅ **Build System**: Cross-platform CMake with liboqs integration
+- ✅ **Random Subdomain Generation**: Dynamic domain generation for steganographic queries
+- ✅ **Production Test Suite**: Comprehensive testing with real post-quantum crypto validation
+- ✅ **HKDF Key Derivation**: Secure key derivation from hybrid secrets
 
-### **Phase 2 Ready - Transport Layer Development**
+### **Phase 2 In Progress - Transport Layer Development**
 
-Phase 1 completion enables immediate start of Phase 2 development:
+**Recently Completed:**
+- ✅ **DNS Response Parsing**: Complete bidirectional communication with domain decompression
+- ✅ **Transport Abstraction**: `ITransport` interface for pluggable protocols
+- ✅ **UDP Transport**: `TransportUdp` implementation with error handling
+- ✅ **Enhanced Client**: Updated to use transport abstraction instead of raw sockets
+- ✅ **Improved Ping**: Actual DNS response parsing and validation
+- ✅ **Security Hardening**: Pointer jump protection and bounds checking
 
-- **DNS Response Parsing**: Handle bidirectional communication
-- **TLS/DoH/DoT Support**: Secure transport layer implementation
-- **Behavioral Mimicry**: Traffic timing profiles and evasion techniques
-- **Async I/O**: High-performance io_uring integration
+**Next Priorities:**
+- 🔄 **TLS/DoH/DoT Support**: Secure transport layer implementation
+- 🔄 **Behavioral Mimicry**: Traffic timing profiles and evasion techniques
+- 🔄 **Async I/O**: High-performance io_uring integration
 
 ### **Current Security Status**
 
@@ -51,6 +57,7 @@ Phase 1 completion enables immediate start of Phase 2 development:
 - **Hybrid Protection**: Defense against both current and quantum attacks
 - **Forward Secrecy**: Ephemeral keys per session
 - **Authentication**: AEAD prevents tampering and forgery
+- **Memory Safety**: Bounds checking and pointer jump protection in DNS parsing
 - **Production Ready**: No placeholders remaining in crypto stack
 
 ## Getting Started
@@ -60,13 +67,13 @@ Phase 1 completion enables immediate start of Phase 2 development:
 1. **C++20 Compiler**: GCC 12+ or Clang 15+
 2. **CMake**: Version 3.16+
 3. **libsodium**: Core cryptography library
-4. **liboqs**: Post-quantum cryptography library (**NEW requirement**)
+4. **liboqs**: Post-quantum cryptography library (**Required for Phase 1**)
 5. **tl::expected**: Header-only error handling (included)
 
 ### Installing Dependencies
 
 **Ubuntu/Debian:**
-```bash
+```
 sudo apt-get update && sudo apt-get install -y libsodium-dev build-essential cmake
 
 # Install liboqs
@@ -80,19 +87,19 @@ sudo ldconfig
 ```
 
 **macOS (Homebrew):**
-```bash
+```
 brew install libsodium liboqs cmake
 ```
 
 **Arch Linux:**
-```bash
+```
 sudo pacman -S libsodium cmake gcc
 # For liboqs, use AUR or build from source
 ```
 
 ### Building
 
-```bash
+```
 # Clone repository
 git clone https://github.com/your-username/chimera.git
 cd chimera
@@ -106,11 +113,11 @@ make -j$(nproc)
 ## Usage
 
 ### Basic Demo
-```bash
+```
 # Send default message
 ./build/chimera_demo
 
-# Send file contents  
+# Send file contents
 ./build/chimera_demo message.txt
 
 # Custom DNS server and domain
@@ -125,7 +132,7 @@ make -j$(nproc)
 - `-h, --help`: Show usage
 
 ### Testing
-```bash
+```
 # Run comprehensive test suite (includes REAL post-quantum crypto tests!)
 ./build/chimera_test
 
@@ -142,33 +149,42 @@ make run_tests
 | **AEAD Module** | Production | ChaCha20-Poly1305 encryption via libsodium |
 | **Hybrid KEM** | Production | **Real X25519 + ML-KEM768** via liboqs |
 | **DNS Codec** | Complete | Packet building with TXT record embedding |
-| **Client Interface** | Complete | High-level steganographic communication API |
+| **DNS Parser** | **Complete** | **Response parsing with domain decompression** |
+| **Transport Layer** | **Complete** | **Pluggable transport abstraction** |
+| **Client Interface** | Enhanced | High-level steganographic communication API |
 | **Base64 Codec** | Production | Fixed HTML entities, proper padding |
 
-### **Production Cryptographic Architecture**
+### **Phase 2 Transport Architecture**
 
-CHIMERA now implements **production-grade** post-quantum security:
+CHIMERA now implements **production-grade** transport abstraction:
 
-1. **Hybrid Key Exchange** (X25519 + ML-KEM768):
-    - **X25519 ECDH**: Classical security via libsodium
-    - **ML-KEM768**: Post-quantum security via liboqs (NIST standard)
-    - **HKDF**: Combined secrets for maximum security
+1. **Transport Interface** (`ITransport`):
+   - Pluggable protocol support (UDP, DoH, DoT)
+   - Standardized error handling with `TransportError`
+   - Timeout management and configuration
 
-2. **AEAD Encryption** (ChaCha20-Poly1305):
-    - Authenticated encryption with associated data
-    - Prevents tampering and replay attacks
-    - High-performance proven security
+2. **UDP Transport** (`TransportUdp`):
+   - Complete UDP/53 implementation
+   - Socket management with RAII
+   - Comprehensive error handling
 
-**Security Level**: This implementation provides **both** classical and post-quantum security, protecting against current and future quantum computer attacks.
+3. **DNS Response Parsing**:
+   - Full domain name decompression
+   - Pointer jump protection (security)
+   - Resource record extraction
+   - Bounds checking for memory safety
+
+**Architecture Benefits**: The transport abstraction enables rapid development of DoH and DoT protocols without changing client code, while maintaining the production-ready security from Phase 1.
 
 ## Technical Stack
 
 - **Language**: C++20
 - **Build**: CMake 3.16+
 - **Cryptography**:
-    - **libsodium 1.0.19+**: Production AEAD + X25519
-    - **liboqs 0.8.0+**: Production ML-KEM768 (Kyber-768)
-    - **HKDF**: Key derivation from hybrid secrets
+  - **libsodium 1.0.19+**: Production AEAD + X25519
+  - **liboqs 0.8.0+**: Production ML-KEM768 (Kyber-768)
+  - **HKDF**: Key derivation from hybrid secrets
+- **Transport**: Pluggable interface with UDP implementation
 - **Error Handling**: tl::expected functional error management
 - **Testing**: Custom test framework with real crypto validation
 - **Platform**: Cross-platform (Linux, macOS, Windows)
@@ -183,12 +199,15 @@ CHIMERA now implements **production-grade** post-quantum security:
 - [x] Comprehensive cryptographic testing
 - [x] **ALL PHASE 1 ITEMS COMPLETE**
 
-### **Phase 2: Transport Layer** (Next Priority)
-- [ ] Abstract transport interfaces (DoH, DoT, UDP)
+### **Phase 2: Transport Layer** 🔄 **IN PROGRESS**
+- [x] Abstract transport interfaces (ITransport)
+- [x] UDP transport implementation with error handling
+- [x] DNS response parsing with domain decompression
+- [x] Bidirectional communication foundation
 - [ ] TLS 1.3 integration for DoH/DoT
-- [ ] DNS response parsing
-- [ ] Bidirectional communication
 - [ ] High-performance I/O with io_uring
+- [ ] HTTP/2 DoH implementation
+- [ ] DNS-over-TLS (DoT) implementation
 
 ### **Phase 3: Steganographic Enhancement**
 - [ ] Multi-record DNS encoding (A, AAAA, TXT)
@@ -210,22 +229,22 @@ CHIMERA now implements **production-grade** post-quantum security:
 
 ## Contributing
 
-**Phase 1 is complete!** Contributions are welcome for Phase 2 development:
+**Phase 2 development is underway!** Contributions are welcome:
 
 1. **Current Focus Areas:**
-    - Transport layer implementation (TLS/DoH/DoT)
-    - DNS response parsing
-    - Async I/O integration
+   - TLS/DoH/DoT transport implementations
+   - Async I/O integration
+   - Performance optimization
 
 2. **How to Contribute:**
-    - Submit pull requests with clear descriptions
-    - Open issues for architectural discussions
-    - Email for mentoring or collaboration
+   - Submit pull requests with clear descriptions
+   - Open issues for architectural discussions
+   - Email for mentoring or collaboration
 
 3. **Learning Opportunities:**
-    - High-performance networking
-    - TLS 1.3 implementation
-    - Traffic analysis evasion
+   - High-performance networking
+   - TLS 1.3 implementation
+   - Traffic analysis evasion
 
 ## Security Considerations
 
@@ -233,9 +252,10 @@ CHIMERA now implements **production-grade** post-quantum security:
 - **Post-Quantum Protection**: Real ML-KEM768 via liboqs
 - **Classical Encryption**: Production-grade via libsodium
 - **Hybrid Security**: Combined classical + quantum resistance
-- **Memory Safety**: Modern C++ practices with RAII
+- **Memory Safety**: Modern C++ practices with RAII and bounds checking
 - **Secure Randomness**: Cryptographically secure RNG
 - **Side-Channel Resistance**: Inherited from libsodium/liboqs
+- **DNS Security**: Pointer jump protection and compression validation
 
 ### **Cryptographic Assurance**
 - **No Placeholders**: All cryptographic components are production-ready
@@ -255,6 +275,6 @@ Special thanks to:
 - **tl::expected** for functional error handling
 - The cryptography and steganography research community
 
-**Milestone**: Phase 1 represents a complete, production-ready post-quantum cryptographic foundation. The project now provides real quantum-resistant security suitable for actual deployment scenarios.
+**Current Milestone**: Phase 2 transport foundation complete. The project now provides pluggable transport abstraction with production DNS response parsing, maintaining quantum-resistant security while enabling rapid protocol development.
 
-**Next**: Phase 2 development begins with transport layer implementation, building on the solid cryptographic foundation established in Phase 1.
+**Next**: Completing TLS integration for DoH/DoT protocols, building on the solid cryptographic and transport foundations.
