@@ -25,7 +25,7 @@ CHIMERA requires several libraries for cryptography and networking:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/chimera.git
+git clone https://github.com/halasz-oliver/chimera.git
 cd chimera
 ```
 
