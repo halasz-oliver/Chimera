@@ -65,7 +65,7 @@ namespace chimera {
 
         static std::vector<std::string> split_domain(const std::string& domain);
 
-        // DNS válasz feldolgozás
+        // DNS response processing
         static size_t read_domain_name(const std::vector<uint8_t>& data, size_t offset, std::string& out_name);
         static uint16_t read_uint16(const std::vector<uint8_t>& data, size_t offset);
         static uint32_t read_uint32(const std::vector<uint8_t>& data, size_t offset);

@@ -3,10 +3,17 @@
 #include <string>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include "tl/expected.hpp"
+#include "common.hpp"
 
-// Kliens osztály - DNS steganográfia kezelés
-// Most már hibrid kulcscserével is
+// Forward declarations
+namespace chimera {
+    class ITransport;
+}
+
+// Client class - DNS steganography handling
+// Now also with hybrid key exchange
 namespace chimera {
 
     enum class ChimeraError {
@@ -24,7 +31,11 @@ namespace chimera {
         std::string target_domain = "example.com";
         std::chrono::milliseconds timeout{5000};
         bool use_random_subdomains = true;
-        bool use_hybrid_crypto = true; // Hibrid kulcscsere engedélyezés
+        bool use_hybrid_crypto = true; // Enable hybrid key exchange
+        TransportType transport = TransportType::UDP;
+        bool adaptive_transport = false; // Behavioral mimicry
+        std::chrono::milliseconds timing_variance{100}; // Jitter for behavioral mimicry
+        BehavioralProfile behavioral_profile = BehavioralProfile::Normal;
     };
 
     struct SendResult {
@@ -39,10 +50,10 @@ namespace chimera {
     public:
         explicit ChimeraClient(ClientConfig config) : config_(std::move(config)) {}
 
-        // Szöveg küldés DNS TXT record-on keresztül
+        // Text sending via DNS TXT record
         tl::expected<SendResult, ChimeraError> send_text(const std::string& message) const;
 
-        // Konfiguráció lekérdezés/módosítás
+        // Configuration query/modification
         [[nodiscard]] const ClientConfig& get_config() const { return config_; }
         void update_config(ClientConfig new_config) { config_ = std::move(new_config); }
 
@@ -50,6 +61,7 @@ namespace chimera {
         tl::expected<std::chrono::milliseconds, ChimeraError> ping_dns_server() const;
 
     private:
+        std::unique_ptr<ITransport> create_transport() const;
         static std::string generate_random_subdomain();
         [[nodiscard]] tl::expected<int, ChimeraError> create_udp_socket() const;
     };

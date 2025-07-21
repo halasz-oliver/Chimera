@@ -4,7 +4,7 @@
 #include <string>
 #include <stdexcept>
 
-// Base64 encoder/decoder - most már teljes padding támogatással
+// Base64 encoder/decoder - now with full padding support
 namespace chimera {
 
 class Base64 {
@@ -62,7 +62,7 @@ public:
                 vals[j] = char_to_val(in[i+j]);
             }
 
-            // Padding számolás
+            // Padding calculation
             int pad = 0;
             if (vals[3] == -1) pad++;
             if (vals[2] == -1) pad++;

@@ -1,0 +1,426 @@
+# CHIMERA - Post-Quantum Polymorphic Steganography
+# Comprehensive .gitignore for C++ CMake project
+
+# =============================================================================
+# BUILD ARTIFACTS
+# =============================================================================
+
+# CMake build directories
+build/
+build-*/
+cmake-build-*/
+out/
+.build/
+_build/
+
+# CMake cache and generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Makefile artifacts
+Makefile
+*.make
+
+# Ninja build files
+build.ninja
+.ninja_deps
+.ninja_log
+
+# =============================================================================
+# COMPILED OUTPUT
+# =============================================================================
+
+# Object files
+*.o
+*.obj
+*.elf
+*.gch
+*.pch
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# =============================================================================
+# IDE AND EDITOR FILES
+# =============================================================================
+
+# CLion
+.idea/
+cmake-build-*/
+.clion.source.cache
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vcproj
+*.vcproj.*.user
+
+# Qt Creator
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+*.pro.user
+*.pro.user.*
+qtcreator-*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+*~
+tags
+[._]*.un~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Eclipse CDT
+.autotools
+.cproject
+.metadata
+.project
+.settings/
+
+# Code::Blocks
+*.cbp
+*.layout
+*.depend
+
+# Dev-C++
+*.dev
+
+# =============================================================================
+# OPERATING SYSTEM FILES
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.tmp
+*.temp
+*.swp
+*.swo
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# PACKAGE MANAGERS AND DEPENDENCIES
+# =============================================================================
+
+# Conan
+conandata.yml
+conaninfo.txt
+conanbuildinfo.*
+conan.lock
+graph_info.json
+
+# vcpkg
+vcpkg_installed/
+.vcpkg-root
+
+# Homebrew (macOS)
+Brewfile.lock.json
+
+# =============================================================================
+# TESTING AND COVERAGE
+# =============================================================================
+
+# Test results
+test_results/
+Testing/
+CTestTestfile.cmake
+*.gcov
+*.gcda
+*.gcno
+coverage.info
+coverage/
+lcov.info
+
+# Google Test
+gtest/
+googletest/
+
+# Catch2
+catch2/
+
+# CTest
+DartConfiguration.tcl
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+
+# Doxygen
+doc/html/
+doc/latex/
+doc/man/
+doc/rtf/
+Doxyfile.bak
+
+# Sphinx
+_build/
+.doctrees/
+
+# =============================================================================
+# SECURITY AND SECRETS
+# =============================================================================
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# SSL certificates and keys
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Configuration files with secrets
+*secret*
+*private*
+config.local.*
+
+# =============================================================================
+# LOGS AND TEMPORARY FILES
+# =============================================================================
+
+# Log files
+*.log
+logs/
+*.trace
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Swap files
+*.swp
+*.swo
+
+# =============================================================================
+# CRYPTOGRAPHY AND CHIMERA SPECIFIC
+# =============================================================================
+
+# Generated key files (example patterns)
+*.priv
+*.pub
+keyfile*
+private_key*
+public_key*
+
+# Test vectors and samples
+test_vectors/
+samples/
+*.sample
+
+# Benchmark results
+benchmarks/
+*.bench
+
+# Performance profiling
+*.prof
+callgrind.out.*
+massif.out.*
+perf.data*
+
+# =============================================================================
+# ARCHIVES AND PACKAGES
+# =============================================================================
+
+# Compressed files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+*.bz2
+*.xz
+
+# Package files
+*.deb
+*.rpm
+*.pkg
+*.dmg
+
+# =============================================================================
+# MISC
+# =============================================================================
+
+# Node.js (if using any JS tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if using any Python tools)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Cache directories
+.cache/
+.ccache/
+
+# JetBrains products
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# LLVM/Clang
+*.bc
+*.ll
+
+# Address Sanitizer
+*.asan
+
+# Memory Sanitizer  
+*.msan
+
+# Thread Sanitizer
+*.tsan
+
+# UndefinedBehavior Sanitizer
+*.ubsan
+
+# =============================================================================
+# PROJECT SPECIFIC OVERRIDES
+# =============================================================================
+
+# Keep certain files that might normally be ignored
+!.gitkeep
+!.github/
+
+# Keep documentation
+!wiki/
+!docs/
+
+# Keep configuration templates
+!*.template
+!*.example
+!config.sample.*
+/forge.yaml

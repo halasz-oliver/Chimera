@@ -3,7 +3,7 @@
 #include <fstream>
 #include <string>
 
-// Egyszerű CLI parsing - később cseréljük le egy rendes library-re
+// Simple CLI parsing - later replace with a proper library
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options] [message_file]\n";
     std::cout << "Options:\n";
@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     chimera::ClientConfig config;
     std::string message = "Hello from Chimera! 🦎";
 
-    // Alapvető argument parsing
+    // Basic argument parsing
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
         } else if (arg[0] != '-') {
-            // Fájlnév
+            // Filename
             std::ifstream file(arg);
             if (file.is_open()) {
                 std::string line;
@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
     std::cout << "Message length: " << message.size() << " characters" << std::endl;
     std::cout << "=========================================" << std::endl;
 
-    // Kliens létrehozás és üzenet küldés
+    // Client creation and message sending
     chimera::ChimeraClient client(config);
 
     // Ping teszt
@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
         std::cout << "Ping failed, but trying to send message..." << std::endl;
     }
 
-    // Üzenet küldés
+    // Message sending
     std::cout << "\nSending message..." << std::endl;
     auto result = client.send_text(message);
     if (result) {

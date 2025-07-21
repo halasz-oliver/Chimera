@@ -4,10 +4,10 @@
 #include <iostream>
 #include <cstring>
 
-// Production ML-KEM768 implementáció liboqs-szel
+// Production ML-KEM768 implementation with liboqs
 namespace chimera {
 
-// AEAD konstruktor - libsodium inicializálás
+// AEAD constructor - libsodium initialization
 AEAD::AEAD() {
     if (sodium_init() < 0) {
         std::cerr << "FATAL: libsodium initialization failed!" << std::endl;
@@ -30,7 +30,7 @@ tl::expected<EncryptedPacket, CryptoError> AEAD::encrypt(
         return tl::unexpected(CryptoError::InvalidKeyOrNonce);
     }
 
-    // Nonce generálás minden titkosításnál
+    // Nonce generation for every encryption
     Nonce nonce(crypto_aead_chacha20poly1305_ietf_NPUBBYTES);
     randombytes_buf(nonce.data(), nonce.size());
 
@@ -82,13 +82,13 @@ tl::expected<Plaintext, CryptoError> AEAD::decrypt(
     return decrypted_message;
 }
 
-// Hibrid kulcscsere implementáció - PRODUCTION ML-KEM768
+// Hybrid key exchange implementation - PRODUCTION ML-KEM768
 HybridKeyExchange::HybridKeyExchange() {
     if (sodium_init() < 0) {
         throw std::runtime_error("Sodium initialization failed");
     }
 
-    // liboqs inicializálás ellenőrzés
+    // liboqs initialization check
     if (!OQS_KEM_alg_is_enabled(OQS_KEM_alg_kyber_768)) {
         throw std::runtime_error("ML-KEM768 not available in liboqs");
     }
@@ -97,7 +97,7 @@ HybridKeyExchange::HybridKeyExchange() {
 tl::expected<HybridKeyPair, CryptoError> HybridKeyExchange::generate_keypair() {
     HybridKeyPair keypair;
 
-    // X25519 kulcspár generálás
+    // X25519 keypair generation
     keypair.x25519_public.resize(crypto_box_PUBLICKEYBYTES);
     keypair.x25519_private.resize(crypto_box_SECRETKEYBYTES);
 
@@ -105,7 +105,7 @@ tl::expected<HybridKeyPair, CryptoError> HybridKeyExchange::generate_keypair() {
         return tl::unexpected(CryptoError::KeyGenerationFailed);
     }
 
-    // ML-KEM768 kulcspár generálás liboqs-szel
+    // ML-KEM768 keypair generation with liboqs
     OQS_KEM* kem = OQS_KEM_new(OQS_KEM_alg_kyber_768);
     if (!kem) {
         return tl::unexpected(CryptoError::KeyGenerationFailed);
@@ -131,7 +131,7 @@ tl::expected<HybridKeyExchangeResult, CryptoError> HybridKeyExchange::initiate_e
     const PublicKey& server_x25519_public,
     const PublicKey& server_mlkem_public) {
 
-    // Kliens oldali kulcspár generálás
+    // Client-side keypair generation
     auto client_keypair_result = generate_keypair();
     if (!client_keypair_result) {
         return tl::unexpected(client_keypair_result.error());
@@ -144,13 +144,13 @@ tl::expected<HybridKeyExchangeResult, CryptoError> HybridKeyExchange::initiate_e
         return tl::unexpected(x25519_secret_result.error());
     }
 
-    // ML-KEM768 enkapszuláció - PRODUCTION
+    // ML-KEM768 encapsulation - PRODUCTION
     auto mlkem_result = mlkem_encapsulate(server_mlkem_public);
     if (!mlkem_result) {
         return tl::unexpected(mlkem_result.error());
     }
 
-    // Hibrid megosztott titok kombinálás
+    // Hybrid shared secret combination
     auto x25519_secret = x25519_secret_result.value();
     auto mlkem_secret = mlkem_result.value().first;
     auto mlkem_ciphertext = mlkem_result.value().second;
@@ -177,13 +177,13 @@ tl::expected<SharedSecret, CryptoError> HybridKeyExchange::respond_to_exchange(
         return tl::unexpected(x25519_secret_result.error());
     }
 
-    // ML-KEM768 dekapszuláció - PRODUCTION
+    // ML-KEM768 decapsulation - PRODUCTION
     auto mlkem_secret_result = mlkem_decapsulate(server_keypair.mlkem_private, client_mlkem_ciphertext);
     if (!mlkem_secret_result) {
         return tl::unexpected(mlkem_secret_result.error());
     }
 
-    // Hibrid megosztott titok kombinálás
+    // Hybrid shared secret combination
     auto x25519_secret = x25519_secret_result.value();
     auto mlkem_secret = mlkem_secret_result.value();
 
@@ -202,7 +202,7 @@ tl::expected<CryptoKey, CryptoError> HybridKeyExchange::derive_key(
     return hkdf_expand(shared_secret, info, crypto_aead_chacha20poly1305_ietf_KEYBYTES);
 }
 
-// Privát segédfüggvények
+// Private helper functions
 tl::expected<SharedSecret, CryptoError> HybridKeyExchange::x25519_exchange(
     const PrivateKey& private_key,
     const PublicKey& public_key) {
@@ -220,7 +220,7 @@ tl::expected<SharedSecret, CryptoError> HybridKeyExchange::x25519_exchange(
     return shared_secret;
 }
 
-// PRODUCTION ML-KEM768 enkapszuláció
+// PRODUCTION ML-KEM768 encapsulation
 tl::expected<std::pair<SharedSecret, Ciphertext>, CryptoError> HybridKeyExchange::mlkem_encapsulate(
     const PublicKey& public_key) {
 
@@ -251,7 +251,7 @@ tl::expected<std::pair<SharedSecret, Ciphertext>, CryptoError> HybridKeyExchange
     return std::make_pair(shared_secret, ciphertext);
 }
 
-// PRODUCTION ML-KEM768 dekapszuláció
+// PRODUCTION ML-KEM768 decapsulation
 tl::expected<SharedSecret, CryptoError> HybridKeyExchange::mlkem_decapsulate(
     const PrivateKey& private_key,
     const Ciphertext& ciphertext) {
@@ -288,7 +288,7 @@ tl::expected<CryptoKey, CryptoError> HybridKeyExchange::hkdf_expand(
     const std::string& info,
     size_t key_length) {
 
-    // HKDF implementáció libsodium-mal
+    // HKDF implementation with libsodium
     CryptoKey derived_key(key_length);
 
     if (crypto_kdf_blake2b_derive_from_key(

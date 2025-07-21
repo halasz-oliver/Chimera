@@ -2,18 +2,54 @@
 #include "chimera/base64.hpp"
 #include "chimera/dns_packet.hpp"
 #include "chimera/Transport.hpp"
+#include "chimera/BehavioralMimicry.hpp"
 #include <iostream>
 #include <random>
+#include <thread>
 
 namespace chimera {
 
 tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::string& message) const {
     auto start_time = std::chrono::steady_clock::now();
 
-    TransportUdp transport(config_.dns_server, config_.dns_port);
-    transport.set_timeout(config_.timeout);
+    // Create appropriate transport
+    auto transport = create_transport();
+    if (!transport) {
+        return tl::unexpected(ChimeraError::ConfigError);
+    }
+    
+    transport->set_timeout(config_.timeout);
 
-    // Base64 kódolás
+    // Behavioral mimicry: add random delay if enabled
+    if (config_.adaptive_transport) {
+        BehavioralMimicry mimicry(config_.behavioral_profile);
+        mimicry.apply_behavioral_delay();
+        
+        // Potentially switch transport based on behavioral patterns
+        if (mimicry.should_switch_transport()) {
+            AdaptiveTransportManager transport_manager;
+            auto recommended = mimicry.get_recommended_transport();
+            // Use recommended transport for this request
+            std::unique_ptr<ITransport> alt_transport;
+            switch (recommended) {
+                case TransportType::UDP:
+                    alt_transport = std::make_unique<TransportUdp>(config_.dns_server, config_.dns_port);
+                    break;
+                case TransportType::DoH:
+                    alt_transport = std::make_unique<TransportDoH>(config_.dns_server);
+                    break;
+                case TransportType::DoT:
+                    alt_transport = std::make_unique<TransportDoT>(config_.dns_server, config_.dns_port);
+                    break;
+            }
+            if (alt_transport) {
+                transport = std::move(alt_transport);
+                transport->set_timeout(config_.timeout);
+            }
+        }
+    }
+
+    // Base64 encoding
     std::string encoded_message;
     try {
         encoded_message = Base64::encode(message);
@@ -22,7 +58,7 @@ tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::strin
         return tl::unexpected(ChimeraError::EncodingError);
     }
 
-    // Domain generálás
+    // Domain generation
     std::string target_domain = config_.target_domain;
     if (config_.use_random_subdomains) {
         target_domain = generate_random_subdomain() + "." + config_.target_domain;
@@ -37,7 +73,7 @@ tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::strin
         return tl::unexpected(ChimeraError::DnsError);
     }
 
-    auto send_result = transport.send(packet);
+    auto send_result = transport->send(packet);
     if (!send_result) {
         std::cerr << "Send error" << std::endl;
         return tl::unexpected(ChimeraError::NetworkError);
@@ -60,8 +96,12 @@ tl::expected<SendResult, ChimeraError> ChimeraClient::send_text(const std::strin
 tl::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_server() const {
     const auto start_time = std::chrono::steady_clock::now();
 
-    TransportUdp transport(config_.dns_server, config_.dns_port);
-    transport.set_timeout(config_.timeout);
+    auto transport = create_transport();
+    if (!transport) {
+        return tl::unexpected(ChimeraError::ConfigError);
+    }
+    
+    transport->set_timeout(config_.timeout);
 
     const DnsQuestion ping_question{"ping.test", DnsType::A};
     std::vector<uint8_t> packet;
@@ -72,19 +112,19 @@ tl::expected<std::chrono::milliseconds, ChimeraError> ChimeraClient::ping_dns_se
         return tl::unexpected(ChimeraError::DnsError);
     }
 
-    auto send_result = transport.send(packet);
+    auto send_result = transport->send(packet);
     if (!send_result) {
         std::cerr << "Ping send error" << std::endl;
         return tl::unexpected(ChimeraError::NetworkError);
     }
 
-    auto recv_result = transport.receive();
+    auto recv_result = transport->receive();
     if (!recv_result) {
         std::cerr << "Ping receive error" << std::endl;
         return tl::unexpected(ChimeraError::NetworkError);
     }
 
-    // Válasz feldolgozás
+    // Response processing
     std::vector<DnsResourceRecord> answers;
     try {
         DnsPacketBuilder::parse_response(recv_result.value(), answers);
@@ -114,6 +154,19 @@ std::string ChimeraClient::generate_random_subdomain() {
         subdomain += chars[dis(gen)];
     }
     return subdomain;
+}
+
+std::unique_ptr<ITransport> ChimeraClient::create_transport() const {
+    switch (config_.transport) {
+        case TransportType::UDP:
+            return std::make_unique<TransportUdp>(config_.dns_server, config_.dns_port);
+        case TransportType::DoH:
+            return std::make_unique<TransportDoH>(config_.dns_server);
+        case TransportType::DoT:
+            return std::make_unique<TransportDoT>(config_.dns_server, config_.dns_port);
+        default:
+            return nullptr;
+    }
 }
 
 } // namespace chimera

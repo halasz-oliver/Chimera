@@ -51,14 +51,14 @@ std::vector<uint8_t> DnsPacketBuilder::parse_response(const std::vector<uint8_t>
     hdr.nscount = (response[offset] << 8) | response[offset + 1]; offset += 2;
     hdr.arcount = (response[offset] << 8) | response[offset + 1]; offset += 2;
 
-    // Kérdések kihagyása
+    // Skip questions
     for (int i = 0; i < hdr.qdcount; ++i) {
         std::string qname;
         offset += read_domain_name(response, offset, qname);
         offset += 4; // type(2) + class(2)
     }
 
-    // Válaszok feldolgozása
+    // Process answers
     for (int i = 0; i < hdr.ancount; ++i) {
         DnsResourceRecord rr;
         const size_t name_len = read_domain_name(response, offset, rr.name);
@@ -190,7 +190,7 @@ size_t DnsPacketBuilder::read_domain_name(const std::vector<uint8_t>& data, size
             offset++;
             break;
         }
-        // Pointer ellenőrzés (2 MSB beállítva)
+        // Pointer check (2 MSB set)
         if ((len & 0xC0) == 0xC0) {
             if (offset + 1 >= data.size()) {
                 throw std::runtime_error("DNS pointer exceeds bounds");

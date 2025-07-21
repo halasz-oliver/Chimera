@@ -30,7 +30,7 @@ public:
     virtual void set_timeout(std::chrono::milliseconds timeout) = 0;
 };
 
-// UDP transport implementáció
+// UDP transport implementation
 class TransportUdp : public ITransport {
     int sock_ = -1;
     sockaddr_in server_addr_{};
@@ -90,6 +90,61 @@ public:
             setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
         }
     }
+};
+
+// DoH (DNS-over-HTTPS) transport implementation
+class TransportDoH : public ITransport {
+    std::string server_url_;
+    std::chrono::milliseconds timeout_ = std::chrono::milliseconds(5000);
+    std::vector<uint8_t> last_response_; // Store response from HTTPS request
+    
+public:
+    TransportDoH(const std::string& server_url) : server_url_(server_url) {
+        // Ensure URL has proper format
+        if (server_url_.find("https://") != 0) {
+            server_url_ = "https://" + server_url_;
+        }
+        if (server_url_.back() != '/') {
+            server_url_ += "/";
+        }
+        server_url_ += "dns-query";
+    }
+
+    tl::expected<size_t, TransportError> send(const std::vector<uint8_t>& data) override;
+    tl::expected<std::vector<uint8_t>, TransportError> receive() override;
+    void set_timeout(std::chrono::milliseconds timeout) override {
+        timeout_ = timeout;
+    }
+
+private:
+    tl::expected<std::vector<uint8_t>, TransportError> perform_https_request(const std::vector<uint8_t>& dns_query);
+    std::string base64_url_encode(const std::vector<uint8_t>& data);
+};
+
+// DoT (DNS-over-TLS) transport implementation  
+class TransportDoT : public ITransport {
+    std::string server_ip_;
+    uint16_t port_;
+    std::chrono::milliseconds timeout_ = std::chrono::milliseconds(5000);
+    void* ssl_ctx_ = nullptr;
+    void* ssl_ = nullptr;
+    int sock_ = -1;
+
+public:
+    TransportDoT(const std::string& server_ip, uint16_t port = 853) 
+        : server_ip_(server_ip), port_(port) {}
+    
+    ~TransportDoT();
+
+    tl::expected<size_t, TransportError> send(const std::vector<uint8_t>& data) override;
+    tl::expected<std::vector<uint8_t>, TransportError> receive() override;
+    void set_timeout(std::chrono::milliseconds timeout) override {
+        timeout_ = timeout;
+    }
+
+private:
+    tl::expected<void, TransportError> establish_tls_connection();
+    void cleanup_connection();
 };
 
 } // namespace chimera
