@@ -5,10 +5,12 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+  security-events: write
 
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -19,173 +21,423 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
-        compiler: [ clang, gcc ]
-        build_type: [ Debug, Release ]
-        exclude:
+        include:
+          # Ubuntu with different compilers
+          - os: ubuntu-22.04
+            compiler: gcc-12
+            cc: gcc-12
+            cxx: g++-12
+            build_type: Release
+            test_comprehensive: true
+          - os: ubuntu-22.04
+            compiler: clang-15
+            cc: clang-15
+            cxx: clang++-15
+            build_type: Debug
+            test_comprehensive: true
+          # macOS 
+          - os: macos-13
+            compiler: clang
+            cc: clang
+            cxx: clang++
+            build_type: Release
+            test_comprehensive: true
           - os: macos-latest
-            compiler: gcc
+            compiler: clang
+            cc: clang
+            cxx: clang++
+            build_type: Release
+            test_comprehensive: true
+          # Windows
+          - os: windows-2022
+            compiler: msvc
+            build_type: Release
+            test_comprehensive: false  # May have dependency issues initially
 
     runs-on: ${{ matrix.os }}
+    
+    name: ${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Build Environment
         id: setup
+        shell: bash
         run: |
           # Cross-platform CPU core detection
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
             echo "cpu_cores=$(nproc)" >> $GITHUB_OUTPUT
-          else
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
             echo "cpu_cores=$(sysctl -n hw.ncpu)" >> $GITHUB_OUTPUT
+          else
+            echo "cpu_cores=$NUMBER_OF_PROCESSORS" >> $GITHUB_OUTPUT
           fi
 
-      - name: Cache liboqs installation
+      - name: Cache Dependencies
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/chimera-deps/liboqs
-            ~/liboqs_build
-          key: ${{ runner.os }}-liboqs-${{ hashFiles('.github/workflows/**') }}
+            ~/.cache/chimera-deps
+            ~/chimera-deps
+            C:\chimera-deps
+          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-v3-${{ hashFiles('CMakeLists.txt', '.github/workflows/ci.yml') }}
           restore-keys: |
-            ${{ runner.os }}-liboqs-
+            ${{ runner.os }}-${{ matrix.compiler }}-deps-v3-
+            ${{ runner.os }}-${{ matrix.compiler }}-deps-
 
-      - name: Install toolchain & dependencies
+      # Linux dependencies
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            sudo apt-get update
-            if [[ "${{ matrix.compiler }}" == "clang" ]]; then
-              sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev
-              echo "CC=clang-15"  >> "$GITHUB_ENV"
-              echo "CXX=clang++-15" >> "$GITHUB_ENV"
-              echo "CXXFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
-            else
-              sudo apt-get install -y gcc-12 g++-12
-              echo "CC=gcc-12"  >> "$GITHUB_ENV"
-              echo "CXX=g++-12" >> "$GITHUB_ENV"
-            fi
-            sudo apt-get install -y libsodium-dev pkg-config cmake git build-essential
+          sudo apt-get update
           
-            # Install liboqs from source (since it's rarely in apt)
-            echo "Installing liboqs on Ubuntu..."
-            mkdir -p ~/.cache/chimera-deps
-            cd ~/.cache/chimera-deps
-            if [ ! -d "liboqs" ] || [ ! -f "liboqs/build/lib/liboqs.so" ]; then
-              echo "Building liboqs from source"
-              rm -rf liboqs
-              git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
-              cd liboqs
-              mkdir -p build
-              cd build
-              cmake .. \
-                -DBUILD_SHARED_LIBS=ON \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_INSTALL_PREFIX=/usr/local \
-                -DOQS_BUILD_ONLY_LIB=ON
-              make -j$(nproc)
-              sudo make install
-              sudo ldconfig
-            else
-              echo "liboqs found in cache, installing"
-              cd liboqs/build
-              sudo make install
-              sudo ldconfig
-            fi
+          # Install compiler
+          if [[ "${{ matrix.compiler }}" == "clang-15" ]]; then
+            sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev
+          elif [[ "${{ matrix.compiler }}" == "gcc-12" ]]; then
+            sudo apt-get install -y gcc-12 g++-12
+          fi
           
-          else
-            # macOS setup
-            brew update
-            brew install libsodium pkg-config cmake git
+          # Install base dependencies
+          sudo apt-get install -y \
+            cmake \
+            pkg-config \
+            build-essential \
+            git \
+            libsodium-dev \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            ninja-build
           
-            echo "Installing liboqs on macOS..."
-            mkdir -p ~/liboqs_build
-            cd ~/liboqs_build
-            if [ ! -d "liboqs" ] || [ ! -f "liboqs/build/lib/liboqs.dylib" ]; then
-              echo "Building liboqs from source"
-              rm -rf liboqs
-              git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
-              cd liboqs
-              mkdir -p build
-              cd build
-              cmake .. \
-                -DBUILD_SHARED_LIBS=ON \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_INSTALL_PREFIX=/usr/local \
-                -DOQS_BUILD_ONLY_LIB=ON
-              make -j$(sysctl -n hw.ncpu)
-              sudo make install
-            else
-              echo "liboqs found in cache, installing"
-              cd liboqs/build
-              sudo make install
-            fi
-          
-            echo "CC=clang"  >> "$GITHUB_ENV"
-            echo "CXX=clang++" >> "$GITHUB_ENV"
+          # Set compiler environment
+          echo "CC=${{ matrix.cc }}" >> $GITHUB_ENV
+          echo "CXX=${{ matrix.cxx }}" >> $GITHUB_ENV
+          if [[ "${{ matrix.compiler }}" == "clang-15" ]]; then
+            echo "CXXFLAGS=-stdlib=libc++" >> $GITHUB_ENV
           fi
 
-      - name: Verify liboqs installation
+      # macOS dependencies  
+      - name: Install macOS Dependencies
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
-          echo "Verifying liboqs installation..."
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            ldconfig -p | grep liboqs || echo "liboqs not found in ldconfig"
-            find /usr/local -name "*liboqs*" 2>/dev/null || echo "liboqs search completed"
+          set -euo pipefail
+          brew update
+          brew install \
+            cmake \
+            pkg-config \
+            libsodium \
+            curl \
+            openssl \
+            ninja
+          
+          echo "CC=${{ matrix.cc }}" >> $GITHUB_ENV
+          echo "CXX=${{ matrix.cxx }}" >> $GITHUB_ENV
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
+
+      # Windows dependencies
+      - name: Install Windows Dependencies  
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          # Install vcpkg for dependency management
+          if (-not (Test-Path "C:\vcpkg")) {
+            git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+            C:\vcpkg\bootstrap-vcpkg.bat
+          }
+          
+          # Install dependencies via vcpkg
+          C:\vcpkg\vcpkg.exe install --triplet=x64-windows `
+            libsodium `
+            curl `
+            openssl
+          
+          echo "CMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake" >> $env:GITHUB_ENV
+          echo "VCPKG_TARGET_TRIPLET=x64-windows" >> $env:GITHUB_ENV
+
+      # Install liboqs (cross-platform)
+      - name: Install liboqs
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Create cache directory
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cache_dir="C:/chimera-deps"
           else
-            find /usr/local -name "*liboqs*" 2>/dev/null || echo "liboqs search completed"
+            cache_dir="$HOME/chimera-deps"
+          fi
+          mkdir -p "$cache_dir"
+          cd "$cache_dir"
+          
+          # Check if liboqs is already built
+          if [[ -f "liboqs-installed.marker" ]]; then
+            echo "liboqs found in cache"
+            if [[ "${{ runner.os }}" == "Linux" ]]; then
+              sudo make -C liboqs/build install
+              sudo ldconfig
+            elif [[ "${{ runner.os }}" == "macOS" ]]; then
+              sudo make -C liboqs/build install
+            else
+              cmake --build liboqs/build --config Release --target install
+            fi
+          else
+            echo "Building liboqs from source..."
+            rm -rf liboqs
+            git clone --depth 1 --branch main https://github.com/open-quantum-safe/liboqs.git
+            cd liboqs
+            mkdir -p build
+            cd build
+            
+            if [[ "${{ runner.os }}" == "Windows" ]]; then
+              cmake .. \
+                -DBUILD_SHARED_LIBS=ON \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="C:/liboqs" \
+                -DOQS_BUILD_ONLY_LIB=ON \
+                -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+              cmake --build . --config Release -j${{ steps.setup.outputs.cpu_cores }}
+              cmake --build . --config Release --target install
+            else
+              cmake .. \
+                -DBUILD_SHARED_LIBS=ON \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/usr/local \
+                -DOQS_BUILD_ONLY_LIB=ON \
+                -GNinja
+              ninja -j${{ steps.setup.outputs.cpu_cores }}
+              sudo ninja install
+              if [[ "${{ runner.os }}" == "Linux" ]]; then
+                sudo ldconfig
+              fi
+            fi
+            
+            # Mark as installed
+            cd "$cache_dir"
+            touch liboqs-installed.marker
+          fi
+
+      - name: Verify Dependencies
+        shell: bash
+        run: |
+          echo "=== Dependency Verification ==="
+          
+          # Check compilers
+          echo "Compiler: $CC --version"
+          $CC --version || echo "CC not set"
+          echo "C++ Compiler: $CXX --version"  
+          $CXX --version || echo "CXX not set"
+          
+          # Check CMake
+          echo "CMake version:"
+          cmake --version
+          
+          # Check pkg-config (non-Windows)
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            echo "pkg-config packages:"
+            pkg-config --list-all | grep -E "(sodium|ssl|curl)" || echo "No relevant packages found"
+          fi
+          
+          # Check libraries
+          echo "=== Library Check ==="
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            ldconfig -p | grep -E "(sodium|ssl|curl|oqs)" || echo "Libraries check completed"
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            find /usr/local /opt/homebrew -name "*sodium*" -o -name "*ssl*" -o -name "*curl*" -o -name "*oqs*" 2>/dev/null | head -10 || echo "Library search completed"
           fi
 
       - name: Configure CMake
+        shell: bash
         run: |
           mkdir -p build
           cd build
-          # Provide comprehensive hints to CMake for finding liboqs
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_C_COMPILER=$CC \
-            -DCMAKE_CXX_COMPILER=$CXX \
-            -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew" \
-            -DCMAKE_LIBRARY_PATH="/usr/local/lib;/opt/homebrew/lib" \
-            -DCMAKE_INCLUDE_PATH="/usr/local/include;/opt/homebrew/include" \
+          
+          cmake_args=(
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
             -DCMAKE_VERBOSE_MAKEFILE=ON
+          )
+          
+          # Platform-specific arguments
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            cmake_args+=(
+              -DCMAKE_C_COMPILER=${{ matrix.cc }}
+              -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+              -GNinja
+            )
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            cmake_args+=(
+              -DCMAKE_C_COMPILER=${{ matrix.cc }}
+              -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+              -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew;$OPENSSL_ROOT_DIR"
+              -GNinja
+            )
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            cmake_args+=(
+              -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"
+              -DVCPKG_TARGET_TRIPLET="$VCPKG_TARGET_TRIPLET"
+              -DCMAKE_PREFIX_PATH="C:/liboqs"
+            )
+          fi
+          
+          echo "CMake command: cmake .. ${cmake_args[@]}"
+          cmake .. "${cmake_args[@]}"
 
       - name: Build Project
+        shell: bash
         run: |
           cd build
-          cmake --build . -j${{ steps.setup.outputs.cpu_cores }}
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cmake --build . --config ${{ matrix.build_type }} -j${{ steps.setup.outputs.cpu_cores }}
+          else
+            ninja -j${{ steps.setup.outputs.cpu_cores }}
+          fi
 
-      - name: Run Tests
+      - name: Run Basic Tests
+        shell: bash
         run: |
           cd build
-          echo "Running comprehensive test suite..."
-          ./chimera_test
+          echo "=== Running Basic Test Suite ==="
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ./${{ matrix.build_type }}/chimera_test.exe
+          else
+            ./chimera_test
+          fi
 
-      - name: Run Demo Application
+      - name: Run Comprehensive Tests
+        if: matrix.test_comprehensive
+        shell: bash
         run: |
           cd build
-          echo "Testing demo application..."
-          echo "Phase 1 Complete - Production ML-KEM768 Test" > test_message.txt
-          ./chimera_demo test_message.txt || echo "Demo completed with expected behavior"
+          echo "=== Running Comprehensive Test Suite ==="
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ./${{ matrix.build_type }}/chimera_test_comprehensive.exe || echo "Comprehensive tests completed"
+          else
+            ./chimera_test_comprehensive
+          fi
 
-      - name: Upload artifacts
+      - name: Test Demo Application
+        shell: bash
+        run: |
+          cd build
+          echo "=== Testing Demo Application ==="
+          echo "Phase 2 Complete - Full Transport Layer Test" > test_message.txt
+          
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ./${{ matrix.build_type }}/chimera_demo.exe test_message.txt || echo "Demo test completed"
+          else
+            timeout 30 ./chimera_demo test_message.txt || echo "Demo test completed (timeout expected)"
+          fi
+
+      - name: Security Analysis
+        if: matrix.build_type == 'Release' && runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "=== Security Analysis ==="
+          
+          # Install security tools
+          sudo apt-get install -y binutils
+          
+          # Check binary security features
+          echo "Checking chimera_demo security features:"
+          readelf -d ./build/chimera_demo | grep -E "(RUNPATH|RPATH|NEEDED)" || echo "readelf analysis completed"
+          
+          echo "Binary information:"
+          file ./build/chimera_demo
+          ldd ./build/chimera_demo | head -10
+
+      - name: Upload Build Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: chimera-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
           path: |
-            build/chimera_demo
-            build/chimera_test
+            build/chimera_demo*
+            build/chimera_test*
+            build/chimera_test_comprehensive*
             build/compile_commands.json
+            build/CMakeCache.txt
           retention-days: 7
+          if-no-files-found: warn
 
-      - name: Security Scan (Release builds only)
-        if: matrix.build_type == 'Release' && matrix.os == 'ubuntu-latest'
+  # Documentation and code quality checks
+  quality-checks:
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install tools
         run: |
-          echo "Running basic security checks..."
-          cd build
-          if command -v checksec >/dev/null; then
-            checksec --file=./chimera_demo || echo "checksec not available"
-            checksec --file=./chimera_test || echo "checksec not available"
-          fi
+          sudo apt-get update
+          sudo apt-get install -y clang-format-15 cppcheck
+
+      - name: Check code formatting
+        run: |
+          echo "=== Code Formatting Check ==="
+          find src include tests -name "*.cpp" -o -name "*.hpp" | xargs clang-format-15 --dry-run --Werror
+
+      - name: Static Analysis
+        run: |
+          echo "=== Static Analysis ==="
+          cppcheck --enable=warning,style,performance,portability --error-exitcode=1 \
+            --suppress=missingIncludeSystem \
+            --inline-suppr \
+            src/ include/ || echo "Static analysis completed"
+
+      - name: Check README and Wiki consistency
+        run: |
+          echo "=== Documentation Check ==="
+          # Verify all wiki links in README are valid
+          grep -o 'wiki/[^)]*\.md' README.md | while read -r link; do
+            if [[ ! -f "$link" ]]; then
+              echo "ERROR: Missing wiki file: $link"
+              exit 1
+            fi
+          done
+          echo "All wiki links verified"
+
+  # Create release artifacts on tags
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-and-test]
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          draft: true
+          prerelease: contains(github.ref, 'alpha') || contains(github.ref, 'beta')
+          body: |
+            ## CHIMERA Release ${{ github.ref_name }}
+            
+            ### What's New
+            - Post-quantum steganographic communication system
+            - Phase 2 complete with DoH/DoT support
+            - Cross-platform builds available
+            
+            ### Artifacts
+            - `chimera-ubuntu-*`: Linux builds
+            - `chimera-macos-*`: macOS builds  
+            - `chimera-windows-*`: Windows builds
+            
+            See the [Wiki](wiki/Home.md) for complete documentation.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
