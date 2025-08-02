@@ -19,6 +19,7 @@ CHIMERA requires several libraries for cryptography and networking:
 - **liboqs**: For post-quantum cryptography (ML-KEM768)
 - **libcurl**: For DNS-over-HTTPS transport
 - **OpenSSL**: For DNS-over-TLS transport
+- **zlib**: For payload compression (Phase 3)
 
 ## Installation
 
@@ -33,13 +34,13 @@ cd chimera
 
 #### macOS (using Homebrew)
 ```bash
-brew install libsodium liboqs curl openssl cmake
+brew install libsodium liboqs curl openssl cmake zlib
 ```
 
 #### Ubuntu/Debian
 ```bash
 sudo apt update
-sudo apt install libsodium-dev liboqs-dev libcurl4-openssl-dev libssl-dev cmake build-essential
+sudo apt install libsodium-dev liboqs-dev libcurl4-openssl-dev libssl-dev cmake build-essential zlib1g-dev
 ```
 
 #### CentOS/RHEL/Fedora
@@ -67,35 +68,78 @@ make -j$(nproc)
 
 ### 4. Verify Installation
 
-Run the test suite to ensure everything is working:
+# Run the unified test suite to ensure everything is working:
 
 ```bash
-# Run basic compatibility tests
-./chimera_test
+# Run all tests (recommended)
+./chimera_test --all
 
-# Run comprehensive Phase 2 tests
-./chimera_test_comprehensive
+# Or run specific test categories:
+./chimera_test --core              # Core functionality only
+./chimera_test --transport         # Transport layer only  
+./chimera_test --steganography     # Phase 3 features only
+./chimera_test --integration       # Integration tests only
+./chimera_test --performance       # Performance benchmarks only
+
+# Quick essential tests
+./chimera_test --quick
+
+# Help and usage
+./chimera_test --help
 ```
 
 Expected output:
 ```
-=== CHIMERA Comprehensive Test Suite ===
-Testing Phase 1 + Phase 2 functionality
-Production-ready steganographic framework
+=== CHIMERA Unified Test Suite ===
+Production-ready steganographic framework testing
 
-PHASE 1 TESTS
-[TEST] Base64 Comprehensive...
-[PASS] Base64 Comprehensive passed
-[TEST] Cryptography Production...
-[PASS] Cryptography Production passed
-...
+CORE FUNCTIONALITY TESTS (Phase 1)
+[TEST] Base64 Encoding/Decoding...
+[PASS] Base64 Encoding/Decoding passed
+[TEST] AEAD Cryptography...
+[PASS] AEAD Cryptography passed
+[TEST] Hybrid Key Exchange (X25519 + ML-KEM768)...
+[PASS] Hybrid Key Exchange (X25519 + ML-KEM768) passed
+[TEST] DNS Packet Construction...
+[PASS] DNS Packet Construction passed
 
-CHIMERA PHASE 1 + 2 FULLY VALIDATED!
-[OK] Quantum-resistant cryptography (X25519 + ML-KEM768)
-[OK] Multi-transport steganography (UDP/DoH/DoT)
-[OK] Behavioral mimicry and evasion
-[OK] High-performance async I/O
-[OK] Production-ready steganographic framework
+TRANSPORT LAYER TESTS (Phase 2)
+[TEST] Transport Layer Abstraction...
+[PASS] Transport Layer Abstraction passed
+[TEST] Behavioral Mimicry...
+[PASS] Behavioral Mimicry passed
+[TEST] Async I/O Framework...
+[PASS] Async I/O Framework passed
+
+STEGANOGRAPHIC ENHANCEMENT TESTS (Phase 3)
+[TEST] Multi-record DNS Encoding...
+[PASS] Multi-record DNS Encoding passed
+[TEST] IPv4/IPv6 Address Encoding...
+[PASS] IPv4/IPv6 Address Encoding passed
+[TEST] Enhanced TXT Record Encoding...
+[PASS] Enhanced TXT Record Encoding passed
+[TEST] HTTP/2 Body Encoding...
+[PASS] HTTP/2 Body Encoding passed
+[TEST] Capacity Estimation...
+[PASS] Capacity Estimation passed
+[TEST] Fragment Management...
+[PASS] Fragment Management passed
+
+INTEGRATION TESTS
+[TEST] End-to-End Steganographic Flow...
+[PASS] End-to-End Steganographic Flow passed
+
+PERFORMANCE TESTS
+[TEST] Encoding and Transport Performance...
+[PASS] Encoding and Transport Performance passed
+
+=== TEST SUMMARY ===
+Total: 15/15 tests passed
+🎉 ALL TESTS PASSED!
+
+CHIMERA TEST RESULTS:
+✅ All 15 tests passed!
+🚀 CHIMERA is ready for production use!
 ```
 
 ## First Test
@@ -106,8 +150,11 @@ Try sending your first message:
 # Basic UDP message
 ./chimera_demo "Hello from CHIMERA!"
 
-# Using DoH transport
-./chimera_demo --transport doh "Secure message via HTTPS"
+# Using DoH transport with multi-record encoding
+./chimera_demo --transport doh --encoding multi-record "Secure message via HTTPS"
+
+# With compression and noise injection
+./chimera_demo --compress --noise 0.15 "Optimized steganographic message"
 
 # Custom target domain
 ./chimera_demo --domain your-domain.com "Custom domain test"

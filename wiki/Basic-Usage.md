@@ -193,7 +193,7 @@ void send_secure_message() {
 
 void send_multiple_messages() {
     chimera::ClientConfig config;
-    config.server_ip = "8.8.8.8";
+    config.dns_server = "8.8.8.8";
     config.target_domain = "example.com";
     config.use_random_subdomains = true;  // Use different subdomains
     

@@ -18,6 +18,9 @@ find_path(LIBOQS_INCLUDE_DIR oqs/oqs.h REQUIRED)
 # libcurl for DoH (DNS-over-HTTPS) support
 find_package(CURL REQUIRED)
 
+# zlib for compression in steganographic encoding
+find_package(ZLIB REQUIRED)
+
 # Compiler flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
@@ -39,6 +42,7 @@ add_library(chimera_core
         src/Transport.cpp
         src/BehavioralMimicry.cpp
         src/AsyncIO.cpp
+        src/steganography.cpp
 )
 
 target_include_directories(chimera_core PUBLIC
@@ -52,6 +56,7 @@ target_link_libraries(chimera_core PUBLIC
         OpenSSL::SSL
         OpenSSL::Crypto
         CURL::libcurl
+        ZLIB::ZLIB
 )
 
 # Platform specific links
@@ -65,31 +70,51 @@ endif()
 add_executable(chimera_demo src/main.cpp)
 target_link_libraries(chimera_demo chimera_core)
 
-# Test executable
-add_executable(chimera_test tests/test_basic.cpp)
+# Unified test executable
+add_executable(chimera_test tests/test_unified.cpp)
 target_link_libraries(chimera_test chimera_core)
-
-# Comprehensive test executable (Phase 1 + 2)
-add_executable(chimera_test_comprehensive tests/test_comprehensive.cpp)
-target_link_libraries(chimera_test_comprehensive chimera_core)
 
 # Custom targets
 add_custom_target(run_tests
-        COMMAND chimera_test
+        COMMAND $<TARGET_FILE:chimera_test>
         DEPENDS chimera_test
-        COMMENT "Running basic tests"
+        COMMENT "Running unified test suite"
 )
 
-add_custom_target(run_comprehensive_tests
-        COMMAND chimera_test_comprehensive
-        DEPENDS chimera_test_comprehensive
-        COMMENT "Running comprehensive Phase 1 + 2 tests"
+add_custom_target(run_core_tests
+        COMMAND $<TARGET_FILE:chimera_test> --core
+        DEPENDS chimera_test
+        COMMENT "Running core functionality tests (Phase 1)"
+)
+
+add_custom_target(run_transport_tests
+        COMMAND $<TARGET_FILE:chimera_test> --transport
+        DEPENDS chimera_test
+        COMMENT "Running transport layer tests (Phase 2)"
+)
+
+add_custom_target(run_steganography_tests
+        COMMAND $<TARGET_FILE:chimera_test> --steganography
+        DEPENDS chimera_test
+        COMMENT "Running steganographic enhancement tests (Phase 3)"
+)
+
+add_custom_target(run_quick_tests
+        COMMAND $<TARGET_FILE:chimera_test> --quick
+        DEPENDS chimera_test
+        COMMENT "Running quick essential tests"
+)
+
+add_custom_target(run_performance_tests
+        COMMAND $<TARGET_FILE:chimera_test> --performance
+        DEPENDS chimera_test
+        COMMENT "Running performance benchmarks"
 )
 
 add_custom_target(run_all_tests
-        COMMAND chimera_test && chimera_test_comprehensive
-        DEPENDS chimera_test chimera_test_comprehensive
-        COMMENT "Running all test suites"
+        COMMAND $<TARGET_FILE:chimera_test> --all
+        DEPENDS chimera_test
+        COMMENT "Running all unified tests"
 )
 
 add_custom_target(run_demo

