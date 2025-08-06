@@ -2,14 +2,14 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #include <sys/resource.h>
+#include <ctime>
 
 namespace {
     // Helper to check library availability
-    bool isLibraryAvailable(const std::string& libname) {
-        void* handle = dlopen(libname.c_str(), RTLD_LAZY);
-        if (handle) {
-            dlclose(handle);
-            return true;
+    bool isLibraryAvailable(const std::vector<std::string>& names) {
+        for (const auto& n : names) {
+            void* handle = dlopen(n.c_str(), RTLD_LAZY);
+            if (handle) { dlclose(handle); return true; }
         }
         return false;
     }
@@ -25,15 +25,18 @@ std::vector<DiagnosticReport> SystemDiagnostics::runPreflightChecks() {
     reports.push_back(checkNetworkCapabilities());
     reports.push_back(checkPerformanceMetrics());
     reports.push_back(checkFilePermissions());
+    
+    // Sort by severity
+    std::stable_sort(reports.begin(), reports.end(), [](const auto& a, const auto& b){
+        return static_cast<int>(a.level) > static_cast<int>(b.level);
+    });
 
     return reports;
 }
 
 DiagnosticReport SystemDiagnostics::checkCryptoLibraries() {
-    bool hasLibSodium = isLibraryAvailable("libsodium.so") || 
-                        isLibraryAvailable("libsodium.dylib");
-    bool hasLibOQS = isLibraryAvailable("liboqs.so") || 
-                     isLibraryAvailable("liboqs.dylib");
+    bool hasLibSodium = isLibraryAvailable({"libsodium.so","libsodium.dylib","sodium.dll"});
+    bool hasLibOQS = isLibraryAvailable({"liboqs.so","liboqs.dylib","oqs.dll"});
 
     if (!hasLibSodium || !hasLibOQS) {
         return {
@@ -48,7 +51,7 @@ DiagnosticReport SystemDiagnostics::checkCryptoLibraries() {
 
 DiagnosticReport SystemDiagnostics::checkNetworkCapabilities() {
     // Simple DNS resolution test
-    FILE* pipe = popen("dig +short example.com", "r");
+    FILE* pipe = popen("nslookup -type=A example.com 2>/dev/null || dig +short example.com 2>/dev/null", "r");
     if (!pipe) {
         return {
             DiagnosticLevel::WARNING,
@@ -56,17 +59,34 @@ DiagnosticReport SystemDiagnostics::checkNetworkCapabilities() {
             "Check network connectivity and DNS configuration"
         };
     }
+    char buffer[256];
+    bool ok = false;
+    if (fgets(buffer, sizeof(buffer), pipe)) {
+        ok = std::string(buffer).find_first_not_of(" \t\r\n") != std::string::npos;
+    }
     pclose(pipe);
 
+    if (!ok) {
+        return {DiagnosticLevel::WARNING, "DNS resolution returned no records", "Check outbound DNS/DoH/DoT connectivity"};
+    }
     return {DiagnosticLevel::INFO, "Network capabilities verified", ""};
 }
 
 DiagnosticReport SystemDiagnostics::checkPerformanceMetrics() {
     struct rusage usage;
-    getrusage(RUSAGE_SELF, &usage);
+    if (getrusage(RUSAGE_SELF, &usage) != 0) {
+        return {DiagnosticLevel::WARNING, "Unable to read resource usage", "Ensure platform supports getrusage"};
+    }
 
-    // Check memory usage and CPU limits
-    if (usage.ru_maxrss > 1024 * 1024 * 500) {  // 500 MB threshold
+    long rss = usage.ru_maxrss;
+#ifdef __APPLE__
+    // ru_maxrss is bytes on macOS
+    if (rss > 500L * 1024L * 1024L)
+#else
+    // ru_maxrss is kilobytes on Linux
+    if (rss > 500L * 1024L)
+#endif
+    {
         return {
             DiagnosticLevel::WARNING,
             "High memory consumption detected",
@@ -79,7 +99,14 @@ DiagnosticReport SystemDiagnostics::checkPerformanceMetrics() {
 
 DiagnosticReport SystemDiagnostics::checkFilePermissions() {
     // Check current executable's permissions
-    if (access("/proc/self/exe", X_OK) != 0) {
+#if defined(__linux__)
+    const char* exePath = "/proc/self/exe";
+#elif defined(__APPLE__)
+    const char* exePath = "/usr/bin/true"; // placeholder path with execute bit to test permission facility exists
+#else
+    const char* exePath = ".";
+#endif
+    if (access(exePath, X_OK) != 0) {
         return {
             DiagnosticLevel::ERROR,
             "Insufficient file execution permissions",
@@ -96,9 +123,9 @@ std::string SystemDiagnostics::generateDetailedReport() {
 
     report << "Chimera System Diagnostic Report\n";
     report << "================================\n";
-    report << "Generated: " 
-           << std::chrono::system_clock::now().time_since_epoch().count() 
-           << "\n\n";
+    auto now = std::chrono::system_clock::now();
+    std::time_t t = std::chrono::system_clock::to_time_t(now);
+    report << "Generated: " << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S") << "\n\n";
 
     for (const auto& check : checks) {
         std::string levelStr;
@@ -123,7 +150,14 @@ std::string SystemDiagnostics::generateDetailedReport() {
 void SystemDiagnostics::logDiagnostic(DiagnosticLevel level, 
                                        const std::string& message, 
                                        const std::string& suggestion) {
-    std::cerr << "[CHIMERA DIAGNOSTIC] " 
+    const char* lvl = "INFO";
+    switch (level) {
+        case DiagnosticLevel::INFO: lvl = "INFO"; break;
+        case DiagnosticLevel::WARNING: lvl = "WARNING"; break;
+        case DiagnosticLevel::ERROR: lvl = "ERROR"; break;
+        case DiagnosticLevel::CRITICAL: lvl = "CRITICAL"; break;
+    }
+    std::cerr << "[CHIMERA " << lvl << "] "
               << message 
               << (suggestion.empty() ? "" : " (" + suggestion + ")") 
               << std::endl;

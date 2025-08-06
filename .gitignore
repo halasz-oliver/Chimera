@@ -424,3 +424,6 @@ wheels/
 !*.example
 !config.sample.*
 /forge.yaml
+
+# Crush agent artifacts
+.crush/
