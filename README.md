@@ -8,7 +8,7 @@ A production-ready polymorphic framework designed to create practically undetect
 
 **🎉 ALL PHASES COMPLETE!** CHIMERA is now a fully functional, production-ready steganographic communication system with comprehensive multi-record DNS encoding, advanced payload distribution, behavioral mimicry, and quantum-resistant cryptography.
 
-**Current Version**: 0.2.1  
+**Current Version**: 0.2.3
 **Status**: Production Ready  
 **Test Coverage**: 15/15 tests passing across all phases
 
@@ -48,7 +48,53 @@ make run_tests
 
 **For detailed installation instructions for all platforms, see:** **[Getting Started Guide](wiki/Getting-Started.md)**
 
-### Basic Usage
+### Configuration Wizard 🧙‍♂️
+
+NEW! Chimera now includes an interactive configuration wizard to help you easily set up your steganographic communication system. The wizard guides you through setting up key parameters with validation and helpful prompts.
+
+```cpp
+#include "chimera/config_wizard.hpp"
+
+// Use the configuration wizard to set up your client
+chimera::ConfigWizard wizard;
+chimera::ClientConfig config = wizard.runInteractiveSetup();
+chimera::ChimeraClient client(config);
+```
+
+The wizard helps you configure:
+- DNS Server selection
+- Target domain
+- Transport layer (DoH, DoT, UDP)
+- Encoding strategy
+- Compression settings
+- Noise injection parameters
+## System Diagnostics 🩺
+
+NEW! Chimera now includes a comprehensive system diagnostics framework to help users understand their system's compatibility, performance, and potential issues.
+
+```cpp
+#include "chimera/system_diagnostics.hpp"
+
+// Run preflight checks
+auto diagnostics = chimera::SystemDiagnostics::runPreflightChecks();
+
+// Generate a detailed diagnostic report
+std::string report = chimera::SystemDiagnostics::generateDetailedReport();
+std::cout << report;
+
+// Log a specific diagnostic
+chimera::SystemDiagnostics::logDiagnostic(
+    chimera::DiagnosticLevel::WARNING, 
+    "Potential network configuration issue"
+);
+```
+
+System Diagnostics helps you:
+- Verify cryptographic library availability
+- Check network capabilities
+- Monitor performance metrics
+- Validate file permissions
+- Generate comprehensive system reports## Basic Usage
 ```cpp
 #include "chimera/client.hpp"
 
@@ -83,6 +129,8 @@ if (result) {
 | **Examples** | Real-world usage patterns | [Examples](wiki/Examples.md) |
 | **Troubleshooting** | Common issues and solutions | [Troubleshooting](wiki/Troubleshooting.md) |
 | **FAQ** | Frequently asked questions | [FAQ](wiki/FAQ.md) |
+| **System Diagnostics** | Comprehensive system compatibility checks | [System Diagnostics](System-Diagnostics.md) |
+| **Configuration Wizard** | Interactive setup and configuration guidance | [Configuration Wizard](Configuration-Wizard.md) |
 
 ## Implementation Status: 100% COMPLETE
 
