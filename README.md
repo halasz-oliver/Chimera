@@ -2,8 +2,15 @@
 
 Quantum-safe, adaptive covert-channel framework.
 
-Version: 0.2.3
-Status: Experimental
+> [!WARNING]
+> **VERY JANK, VERY MUCH MADE JUST FOR LEARNING!**
+> **PLEASE DON'T USE IT IN ACTUAL PROJECTS!**
+>
+> ---
+>
+> `Version: 0.2.3`
+>
+> `Status: Experimental`
 
 ## Goals
 - DNS-based steganographic transport (UDP/DoT/DoH)
